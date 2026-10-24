@@ -23,6 +23,7 @@ QListWidget#nav::item { padding: 11px 18px; }
 QListWidget#nav::item:selected { background: #cc0000; color: white; }
 QListWidget#nav::item:hover:!selected { background: #323f4b; }
 QPushButton { padding: 6px 14px; }
+QPushButton#small { padding: 2px; }
 QLineEdit:read-only { background: #eef0f3; color: #52606d; }
 QPushButton#primary { background: #cc0000; color: white; border: 1px solid #a30000; border-radius: 3px; }
 QPushButton#primary:hover { background: #b00000; }

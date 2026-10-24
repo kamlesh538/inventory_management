@@ -13,13 +13,12 @@ from jbhonda.core.errors import BusinessError
 from jbhonda.core.gst import round_to_rupee
 from jbhonda.core.money import format_inr
 from jbhonda.core.sales import PartLine
-from jbhonda.core.vehicle_sale import POLICY_TYPES, InsuranceIn, LoanIn, PaymentIn, complete_vehicle_sale
+from jbhonda.core.vehicle_sale import POLICY_TYPES, InsuranceIn, LoanIn, complete_vehicle_sale
 from jbhonda.ui import widgets
 from jbhonda.ui.customer_widgets import CustomerPicker
+from jbhonda.ui.payments import PaymentRow
 from jbhonda.ui.widgets import ChoiceCombo, FormDialog, MoneyEdit
 
-PAYMENT_MODE_CHOICES = [("Cash", "CASH"), ("UPI", "UPI"), ("Card", "CARD"), ("Cheque", "CHEQUE"),
-                        ("Bank transfer", "BANK_TRANSFER")]
 POLICY_LABELS = {"COMPREHENSIVE": "Comprehensive", "THIRD_PARTY": "Third party only",
                  "BUNDLED_1OD_5TP": "Bundled (1 yr OD + 5 yr TP)"}
 
@@ -66,37 +65,6 @@ class AccessoryDialog(FormDialog):
         if part["mrp"] and price > part["mrp"]:
             raise BusinessError(f"Price cannot be more than the MRP ({format_inr(part['mrp'])}).")
         self.result_line = (part, self.quantity.value(), price)
-
-
-class PaymentRow(QWidget):
-    def __init__(self, on_change, on_remove, parent: QWidget | None = None):
-        super().__init__(parent)
-        self.mode = ChoiceCombo(PAYMENT_MODE_CHOICES)
-        self.amount = MoneyEdit()
-        self.reference = QLineEdit()
-        self.reference.setPlaceholderText("UTR / cheque / card ref.")
-        remove = QPushButton("X")
-        remove.setFixedWidth(32)
-        remove.setToolTip("Remove this payment")
-        self.amount.textChanged.connect(on_change)
-        self.mode.currentIndexChanged.connect(self._mode_changed)
-        remove.clicked.connect(lambda: on_remove(self))
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.mode, 1)
-        layout.addWidget(self.amount, 1)
-        layout.addWidget(self.reference, 2)
-        layout.addWidget(remove)
-        self._mode_changed()
-
-    def _mode_changed(self) -> None:
-        self.reference.setEnabled(self.mode.value() != "CASH")
-
-    def payment(self) -> PaymentIn | None:
-        amount = self.amount.value()
-        if not amount:
-            return None
-        return PaymentIn(self.mode.value(), amount, self.reference.text().strip() or None)
 
 
 class SellVehiclePage(QWidget):

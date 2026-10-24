@@ -327,6 +327,13 @@ def find_parts(
     ).fetchall()
 
 
+def part_by_number(conn: sqlite3.Connection, part_number: str) -> sqlite3.Row | None:
+    """Exact (case-insensitive) match on an active part number, e.g. from a barcode scan."""
+    return conn.execute(
+        "SELECT * FROM part WHERE part_number = ? AND is_active = 1", (part_number.strip(),)
+    ).fetchone()
+
+
 def part_history(conn: sqlite3.Connection, part_id: int) -> list[sqlite3.Row]:
     """Every stock movement for a part, oldest first, with the running balance after each."""
     return conn.execute(

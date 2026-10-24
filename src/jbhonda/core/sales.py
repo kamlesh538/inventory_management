@@ -28,6 +28,13 @@ class PartLine:
     discount: int = 0              # on the whole line, incl. GST
 
 
+@dataclass(frozen=True)
+class PaymentIn:
+    mode: str
+    amount: int
+    reference_no: str | None = None
+
+
 @dataclass
 class _Line:
     item_kind: str
@@ -150,6 +157,34 @@ def sell_parts(
         return _create_invoice(
             conn, "PART", on, snapshot, _part_lines(conn, lines), customer_id=customer_id, notes=notes,
         )
+
+
+def complete_part_sale(
+    conn: sqlite3.Connection, *, lines: Sequence[PartLine], payments: Sequence[PaymentIn] = (),
+    customer_id: int | None = None, walk_in_name: str = WALK_IN_NAME, walk_in_phone: str | None = None,
+    on: date | None = None, notes: str | None = None,
+) -> int:
+    """Counter sale with the money taken: bill and payments saved together. Returns the invoice id.
+
+    Paying less than the bill leaves a balance due (credit); paying more is refused.
+    """
+    on = on or date.today()
+    with transaction(conn):
+        invoice_id = sell_parts(conn, lines=lines, customer_id=customer_id, walk_in_name=walk_in_name,
+                                walk_in_phone=walk_in_phone, on=on, notes=notes)
+        due = balance_due(conn, invoice_id)
+        paying = sum(p.amount for p in payments)
+        if paying > due:
+            raise BusinessError(f"Payment ({format_inr(paying)}) is more than the bill ({format_inr(due)}).")
+        if customer_id is None and paying < due:
+            raise BusinessError("A walk-in customer must pay the full amount. Pick a saved customer to give credit.")
+        payment_type = "FULL_PAYMENT" if paying == due else "DOWN_PAYMENT"
+        for p in payments:
+            if p.mode == "FINANCE":
+                raise BusinessError("Finance is only for vehicle sales.")
+            record_payment(conn, invoice_id=invoice_id, amount=p.amount, mode=p.mode, payment_type=payment_type,
+                           reference_no=p.reference_no, on=on)
+        return invoice_id
 
 
 def _customer_snapshot(conn: sqlite3.Connection, customer_id: int) -> dict[str, str | None]:

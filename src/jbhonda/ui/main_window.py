@@ -7,6 +7,7 @@ from jbhonda.ui.bookings_page import BookingsPage
 from jbhonda.ui.home_page import HomePage
 from jbhonda.ui.masters_page import MastersPage
 from jbhonda.ui.parts_page import PartsPage
+from jbhonda.ui.sell_parts_page import SellPartsPage
 from jbhonda.ui.sell_vehicle_page import SellVehiclePage
 from jbhonda.ui.settings_page import SettingsPage
 from jbhonda.ui.vehicles_page import VehiclesPage
@@ -28,6 +29,7 @@ class MainWindow(QMainWindow):
         for name, page in (
             ("Home", HomePage(conn)),
             ("Sell Vehicle", self.sell_vehicle),
+            ("Sell Parts", SellPartsPage(conn)),
             ("Bookings", BookingsPage(conn, on_sell=self.sell_booking)),
             ("Vehicles", VehiclesPage(conn)),
             ("Parts", PartsPage(conn)),

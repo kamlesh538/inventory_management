@@ -22,7 +22,7 @@ Target: Windows 10/11, 64-bit. Single installer `.exe`; data in
 4. [x] Vehicles: add / show
 5. [x] Parts: add / stock-in / show, low-stock highlight
 6. [x] Sell vehicle: customer, booking, payments, loan, insurance → invoice
-7. [ ] Sell parts: counter sale
+7. [x] Sell parts: counter sale
 8. [ ] Invoices screen (list, receive balance, loan received, cancel) + invoice PDFs
 9. [ ] Export (Excel/CSV), backup & restore
 10. [ ] Installer; test on a clean Windows 10 machine

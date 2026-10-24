@@ -16,7 +16,8 @@ from jbhonda.core.inventory import vehicle_colors
 from jbhonda.core.money import format_inr
 from jbhonda.ui import widgets
 from jbhonda.ui.customer_widgets import CustomerPicker
-from jbhonda.ui.sell_vehicle_page import PAYMENT_MODE_CHOICES, vehicle_label
+from jbhonda.ui.payments import PAYMENT_MODE_CHOICES
+from jbhonda.ui.sell_vehicle_page import vehicle_label
 from jbhonda.ui.widgets import ChoiceCombo, Column, DataTable, FormDialog, MoneyEdit, format_date
 
 STATUS_LABELS = {"OPEN": "Open", "ALLOTTED": "Vehicle allotted", "CONVERTED": "Sold", "CANCELLED": "Cancelled"}

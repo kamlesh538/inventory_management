@@ -7,17 +7,10 @@ from datetime import date
 
 from jbhonda.core.errors import BusinessError
 from jbhonda.core.money import format_inr
-from jbhonda.core.sales import PartLine, balance_due, record_payment, sell_vehicle
+from jbhonda.core.sales import PartLine, PaymentIn, balance_due, record_payment, sell_vehicle
 from jbhonda.db import NOW, transaction
 
 POLICY_TYPES = ("COMPREHENSIVE", "THIRD_PARTY", "BUNDLED_1OD_5TP")
-
-
-@dataclass(frozen=True)
-class PaymentIn:
-    mode: str
-    amount: int
-    reference_no: str | None = None
 
 
 @dataclass(frozen=True)
