@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from jbhonda.core.customers import add_customer
+from jbhonda.core.customers import save_customer
 from jbhonda.core.errors import BusinessError
 from jbhonda.core.inventory import find_vehicles, save_vehicle, save_vehicle_model, vehicle_colors
 from jbhonda.core.sales import cancel_invoice, sell_vehicle
@@ -20,7 +20,7 @@ def stock(conn):
                       purchase_date=date(2026, 10, 1), purchase_taxable_value=6800000, purchase_gst_amount=1224000)
     v2 = save_vehicle(conn, vehicle_model_id=activa, chassis_number="CH2", engine_number="EN2", color="Matte Grey")
     v3 = save_vehicle(conn, vehicle_model_id=shine, chassis_number="CH3", engine_number="EN3", color="Black")
-    customer = add_customer(conn, name="Ramesh Kumar", phone="9876543210")
+    customer = save_customer(conn, name="Ramesh Kumar", phone="9876543210")
     return {"activa": activa, "shine": shine, "v1": v1, "v2": v2, "v3": v3, "customer": customer}
 
 

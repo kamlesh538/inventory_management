@@ -3,9 +3,11 @@ import sqlite3
 from PySide6.QtWidgets import QHBoxLayout, QListWidget, QMainWindow, QStackedWidget, QWidget
 
 from jbhonda import __version__
+from jbhonda.ui.bookings_page import BookingsPage
 from jbhonda.ui.home_page import HomePage
 from jbhonda.ui.masters_page import MastersPage
 from jbhonda.ui.parts_page import PartsPage
+from jbhonda.ui.sell_vehicle_page import SellVehiclePage
 from jbhonda.ui.settings_page import SettingsPage
 from jbhonda.ui.vehicles_page import VehiclesPage
 
@@ -22,8 +24,11 @@ class MainWindow(QMainWindow):
         self.nav.setFixedWidth(210)
         self.pages = QStackedWidget()
         self.page_by_name: dict[str, QWidget] = {}
+        self.sell_vehicle = SellVehiclePage(conn)
         for name, page in (
             ("Home", HomePage(conn)),
+            ("Sell Vehicle", self.sell_vehicle),
+            ("Bookings", BookingsPage(conn, on_sell=self.sell_booking)),
             ("Vehicles", VehiclesPage(conn)),
             ("Parts", PartsPage(conn)),
             ("Masters", MastersPage(conn)),
@@ -42,6 +47,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.nav)
         layout.addWidget(self.pages, 1)
         self.setCentralWidget(central)
+
+    def sell_booking(self, booking_id: int) -> None:
+        self.open_page("Sell Vehicle")
+        self.sell_vehicle.load_booking(booking_id)
 
     def open_page(self, name: str) -> None:
         self.nav.setCurrentRow(list(self.page_by_name).index(name))

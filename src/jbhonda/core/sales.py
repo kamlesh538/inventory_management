@@ -61,6 +61,7 @@ def sell_vehicle(
             raise BusinessError("Vehicle not found.")
         if vehicle["status"] not in ("IN_STOCK", "BOOKED"):
             raise BusinessError(f"Vehicle {vehicle['chassis_number']} is not available for sale ({vehicle['status']}).")
+        booking = _check_booking(conn, vehicle, customer_id, booking_id)
 
         price = vehicle["ex_showroom_price"] if sale_price is None else sale_price
         name = " ".join(p for p in ("Honda", vehicle["model_name"], vehicle["variant"]) if p)
@@ -80,7 +81,53 @@ def sell_vehicle(
             customer_id=customer_id, booking_id=booking_id, hypothecated_to=hypothecated_to, notes=notes,
         )
         conn.execute(f"UPDATE vehicle SET status = 'SOLD', updated_at = {NOW} WHERE id = ?", (vehicle_id,))
+        if booking is not None:
+            _convert_booking(conn, booking, invoice_id, vehicle_id)
         return invoice_id
+
+
+def _check_booking(
+    conn: sqlite3.Connection, vehicle: sqlite3.Row, customer_id: int, booking_id: int | None,
+) -> sqlite3.Row | None:
+    if booking_id is None:
+        if vehicle["status"] == "BOOKED":
+            holder = conn.execute(
+                "SELECT b.booking_no, c.name FROM booking b JOIN customer c ON c.id = b.customer_id"
+                " WHERE b.vehicle_id = ? AND b.status = 'ALLOTTED'",
+                (vehicle["id"],),
+            ).fetchone()
+            who = f" to booking {holder['booking_no']} ({holder['name']})" if holder else ""
+            raise BusinessError(f"Vehicle {vehicle['chassis_number']} is allotted{who}. Sell it through that booking.")
+        return None
+    booking = conn.execute("SELECT * FROM booking WHERE id = ?", (booking_id,)).fetchone()
+    if booking is None:
+        raise BusinessError("Booking not found.")
+    if booking["status"] not in ("OPEN", "ALLOTTED"):
+        raise BusinessError(f"Booking {booking['booking_no']} is {booking['status'].lower()}.")
+    if booking["customer_id"] != customer_id:
+        raise BusinessError(f"Booking {booking['booking_no']} belongs to a different customer.")
+    if vehicle["status"] == "BOOKED" and booking["vehicle_id"] != vehicle["id"]:
+        raise BusinessError(f"Vehicle {vehicle['chassis_number']} is allotted to another booking.")
+    return booking
+
+
+def _convert_booking(conn: sqlite3.Connection, booking: sqlite3.Row, invoice_id: int, vehicle_id: int) -> None:
+    """Mark the booking sold, release a different vehicle if one was allotted, move the advance to the invoice."""
+    if booking["vehicle_id"] not in (None, vehicle_id):
+        conn.execute(
+            f"UPDATE vehicle SET status = 'IN_STOCK', updated_at = {NOW} WHERE id = ? AND status = 'BOOKED'",
+            (booking["vehicle_id"],),
+        )
+    conn.execute(
+        f"UPDATE booking SET status = 'CONVERTED', vehicle_id = ?, invoice_id = ?, updated_at = {NOW} WHERE id = ?",
+        (vehicle_id, invoice_id, booking["id"]),
+    )
+    conn.execute(
+        f"UPDATE payment SET invoice_id = ?, updated_at = {NOW} WHERE booking_id = ? AND invoice_id IS NULL",
+        (invoice_id, booking["id"]),
+    )
+    if balance_due(conn, invoice_id) < 0:
+        raise BusinessError("The booking advance is more than the bill amount. Check the price.")
 
 
 def sell_parts(
@@ -203,7 +250,8 @@ def _create_invoice(
 def cancel_invoice(conn: sqlite3.Connection, invoice_id: int, reason: str, on: date | None = None) -> None:
     """Cancel an invoice: vehicles go back in stock and parts are restocked.
 
-    Payments already received stay on record; return money with a REFUND payment.
+    Payments already received stay on record; return money with a REFUND payment. If the sale
+    came from a booking, the booking re-opens and its advance moves back to it.
     """
     if not reason.strip():
         raise BusinessError("Give a reason for cancelling the invoice.")
@@ -220,6 +268,17 @@ def cancel_invoice(conn: sqlite3.Connection, invoice_id: int, reason: str, on: d
             " WHERE id = ?",
             (reason.strip(), invoice_id),
         )
+        if invoice["booking_id"] is not None:
+            # The booking is live again; its advance goes back to it rather than staying on a dead invoice.
+            conn.execute(
+                f"UPDATE booking SET status = 'OPEN', vehicle_id = NULL, invoice_id = NULL, updated_at = {NOW}"
+                " WHERE id = ?",
+                (invoice["booking_id"],),
+            )
+            conn.execute(
+                f"UPDATE payment SET invoice_id = NULL, updated_at = {NOW} WHERE invoice_id = ? AND booking_id = ?",
+                (invoice_id, invoice["booking_id"]),
+            )
         for item in conn.execute("SELECT * FROM invoice_item WHERE invoice_id = ?", (invoice_id,)).fetchall():
             if item["vehicle_id"] is not None:
                 conn.execute(

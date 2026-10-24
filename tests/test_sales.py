@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from jbhonda.core.customers import add_customer
+from jbhonda.core.customers import save_customer
 from jbhonda.core.errors import BusinessError
 from jbhonda.core.inventory import (
     save_part, save_vehicle, save_vehicle_model, adjust_stock, low_stock_parts, purchase_part,
@@ -27,7 +27,7 @@ def shop(conn):
         conn, vehicle_model_id=model, chassis_number=" me4jf91aapg000001 ", engine_number="jf91eg0000001",
         color="Pearl White", purchase_taxable_value=6800000, purchase_gst_amount=1224000,
     )
-    customer = add_customer(
+    customer = save_customer(
         conn, name="Ramesh Kumar", phone="9876543210", relation_type="S/O", relation_name="Suresh Kumar",
         address_line1="12 Station Road", city="Agra", state="Uttar Pradesh", pincode="282001",
     )

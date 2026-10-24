@@ -31,6 +31,9 @@ QFrame#card { background: white; border: 1px solid #d9dde3; border-radius: 6px; 
 QFrame#card[alert="true"] { border: 2px solid #cc0000; }
 QLabel#cardValue { font-size: 20pt; font-weight: 600; }
 QLabel#cardCaption { color: #52606d; }
+QLabel#summaryValue { qproperty-alignment: AlignRight; }
+QLabel#summaryTotal { qproperty-alignment: AlignRight; font-weight: 600; font-size: 12pt; }
+QLabel#summaryValue[alert="true"] { color: #cc0000; font-weight: 600; }
 QLabel#hint { background: #fff4e5; border: 1px solid #f0c36d; border-radius: 3px; padding: 6px; }
 """
 

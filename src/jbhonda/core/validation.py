@@ -19,11 +19,18 @@ def is_valid_gstin(gstin: str) -> bool:
     return bool(_GSTIN_SHAPE.match(gstin)) and gstin_check_char(gstin[:14]) == gstin[14]
 
 
-def is_valid_mobile(phone: str) -> bool:
-    """10-digit Indian mobile number, optionally prefixed with +91 / 91 / 0."""
-    digits = re.sub(r"[\s-]", "", phone)
+def normalize_mobile(phone: str) -> str | None:
+    """Return the bare 10-digit Indian mobile number, or None if it isn't one.
+
+    Accepts spaces, dashes and a +91 / 91 / 0 prefix.
+    """
+    digits = re.sub(r"[\s-]", "", phone or "")
     digits = re.sub(r"^(\+91|91|0)(?=\d{10}$)", "", digits)
-    return bool(re.fullmatch(r"[6-9]\d{9}", digits))
+    return digits if re.fullmatch(r"[6-9]\d{9}", digits) else None
+
+
+def is_valid_mobile(phone: str) -> bool:
+    return normalize_mobile(phone) is not None
 
 
 def is_valid_pincode(pincode: str) -> bool:
