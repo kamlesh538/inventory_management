@@ -1,6 +1,7 @@
 """Vehicle stock: add vehicles as they arrive from Honda, and search/filter the list."""
 
 import sqlite3
+
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
     QComboBox, QDateEdit, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget,
@@ -201,6 +202,8 @@ class VehiclesPage(QWidget):
         self.add_button = QPushButton("Add vehicle")
         self.add_button.setObjectName("primary")
         self.open_button = QPushButton("Open")
+        self.delete_button = QPushButton("Delete")
+        self.delete_button.clicked.connect(self.delete_selected)
 
         self.search.textChanged.connect(self.refresh)
         for combo in (self.model_filter, self.color_filter, self.status_filter):
@@ -222,7 +225,7 @@ class VehiclesPage(QWidget):
             Column("Customer", lambda r: r["bill_name"]),
         ])
         self.table.doubleClicked.connect(self.open_selected)
-        self.table.itemSelectionChanged.connect(lambda: self.open_button.setEnabled(self.table.selected_id() is not None))
+        self.table.itemSelectionChanged.connect(self._update_buttons)
         self.footer = QLabel()
 
         filters = QHBoxLayout()
@@ -233,6 +236,7 @@ class VehiclesPage(QWidget):
         buttons = QHBoxLayout()
         buttons.addWidget(self.add_button)
         buttons.addWidget(self.open_button)
+        buttons.addWidget(self.delete_button)
         buttons.addStretch()
         layout = QVBoxLayout(self)
         layout.addWidget(title)
@@ -268,12 +272,25 @@ class VehiclesPage(QWidget):
             color=self.color_filter.value(), status=self.status_filter.value(),
         )
         self.table.fill(rows)
-        self.open_button.setEnabled(False)
+        self._update_buttons()
         in_stock = [r for r in rows if r["status"] == "IN_STOCK"]
         stock_value = sum(r["purchase_taxable_value"] + r["purchase_gst_amount"] for r in in_stock)
         self.footer.setText(
             f"{len(rows)} vehicles shown  ·  {len(in_stock)} in stock  ·  stock value {format_inr(stock_value)}"
         )
+
+    def _update_buttons(self) -> None:
+        selected = self.table.selected_id() is not None
+        self.open_button.setEnabled(selected)
+        self.delete_button.setEnabled(selected)
+
+    def delete_selected(self) -> None:
+        vehicle_id = self.table.selected_id()
+        if vehicle_id is None:
+            return
+        chassis = self.conn.execute("SELECT chassis_number FROM vehicle WHERE id = ?", (vehicle_id,)).fetchone()[0]
+        if widgets.confirm_delete(self, self.conn, "vehicle", vehicle_id, f"vehicle {chassis}"):
+            self.reload_filters()
 
     def add(self) -> None:
         dialog = VehicleDialog(self.conn, parent=self)

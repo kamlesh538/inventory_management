@@ -37,6 +37,27 @@ def confirm(parent: QWidget | None, message: str) -> bool:
     return QMessageBox.question(parent, "Please confirm", message) == QMessageBox.StandardButton.Yes
 
 
+def confirm_delete(parent: QWidget | None, conn, table: str, record_id: int, what: str) -> bool:
+    """Ask, then delete; explain if the record is in use. Returns True if it was deleted."""
+    from jbhonda.core.deletion import delete_record
+
+    if not confirm(parent, f"Delete {what}? This cannot be undone."):
+        return False
+    try:
+        delete_record(conn, table, record_id)
+    except BusinessError as exc:
+        show_error(parent, str(exc))
+        return False
+    return True
+
+
+def ask_text(parent: QWidget | None, title: str, label: str) -> str | None:
+    from PySide6.QtWidgets import QInputDialog
+
+    text, ok = QInputDialog.getText(parent, title, label)
+    return text if ok else None
+
+
 def open_file(path) -> None:
     """Open a file (e.g. an invoice PDF) in the PC's default program, ready to print."""
     QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))

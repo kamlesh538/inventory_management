@@ -9,6 +9,7 @@ EXPECTED_TABLES = {
     "shop_settings", "invoice_sequence", "vehicle_model", "customer", "financer", "insurer",
     "vehicle", "part", "part_stock_movement", "booking", "invoice", "invoice_item",
     "payment", "loan", "insurance_policy",
+    "labour_item", "service_job", "service_job_part", "service_job_labour",
 }
 
 

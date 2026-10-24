@@ -1,8 +1,9 @@
 import sqlite3
 
-from PySide6.QtWidgets import QHBoxLayout, QListWidget, QMainWindow, QStackedWidget, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QListWidget, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
-from jbhonda import __version__
+from jbhonda import __version__, config
 from jbhonda.ui.bookings_page import BookingsPage
 from jbhonda.ui.data_page import DataPage
 from jbhonda.ui.home_page import HomePage
@@ -19,7 +20,9 @@ class MainWindow(QMainWindow):
     def __init__(self, conn: sqlite3.Connection):
         super().__init__()
         self.conn = conn
-        self.setWindowTitle(f"Jai Bajrang Bali Honda - Inventory & Billing  (v{__version__})")
+        practice = config.practice_mode()
+        self.setWindowTitle(f"Jai Bajrang Bali Honda - Inventory & Billing  (v{__version__})"
+                            + ("  -  PRACTICE MODE" if practice else ""))
         self.resize(1200, 760)
 
         self.nav = QListWidget()
@@ -51,7 +54,16 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.nav)
-        layout.addWidget(self.pages, 1)
+        right = QVBoxLayout()
+        right.setContentsMargins(0, 0, 0, 0)
+        right.setSpacing(0)
+        if practice:
+            banner = QLabel("PRACTICE MODE  -  nothing here is real. Switch back to real data in Settings.")
+            banner.setObjectName("practiceBanner")
+            banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            right.addWidget(banner)
+        right.addWidget(self.pages, 1)
+        layout.addLayout(right, 1)
         self.setCentralWidget(central)
 
     def sell_booking(self, booking_id: int) -> None:

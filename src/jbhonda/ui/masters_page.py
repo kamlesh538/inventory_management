@@ -12,6 +12,7 @@ from jbhonda.core.inventory import VEHICLE_CATEGORIES, save_vehicle_model
 from jbhonda.core.masters import save_financer, save_insurer, set_active
 from jbhonda.core.money import format_inr
 from jbhonda.ui import widgets
+from jbhonda.ui.customer_widgets import CustomerDialog
 from jbhonda.ui.widgets import ChoiceCombo, Column, DataTable, FormDialog, GstRateCombo, MoneyEdit
 
 
@@ -128,6 +129,8 @@ class MasterTab(QWidget):
         self.add_button.setObjectName("primary")
         self.edit_button = QPushButton("Edit")
         self.toggle_button = QPushButton("Deactivate")
+        self.delete_button = QPushButton("Delete")
+        self.delete_button.clicked.connect(self.delete)
         self.show_inactive = QCheckBox("Show inactive")
         self.add_button.clicked.connect(self.add)
         self.edit_button.clicked.connect(self.edit)
@@ -135,7 +138,7 @@ class MasterTab(QWidget):
         self.show_inactive.toggled.connect(self.refresh)
 
         buttons = QHBoxLayout()
-        for w in (self.add_button, self.edit_button, self.toggle_button):
+        for w in (self.add_button, self.edit_button, self.toggle_button, self.delete_button):
             buttons.addWidget(w)
         buttons.addStretch()
         buttons.addWidget(self.show_inactive)
@@ -162,6 +165,7 @@ class MasterTab(QWidget):
         row = self._selected_row()
         self.edit_button.setEnabled(row is not None)
         self.toggle_button.setEnabled(row is not None)
+        self.delete_button.setEnabled(row is not None)
         self.toggle_button.setText("Activate" if row is not None and not row["is_active"] else "Deactivate")
 
     def add(self) -> None:
@@ -171,6 +175,12 @@ class MasterTab(QWidget):
     def edit(self) -> None:
         row = self._selected_row()
         if row is not None and self.dialog(self.conn, row["id"], self).exec():
+            self.refresh()
+
+    def delete(self) -> None:
+        row = self._selected_row()
+        if row is not None and widgets.confirm_delete(self, self.conn, self.table_name, row["id"],
+                                                      f"this {self.noun}"):
             self.refresh()
 
     def toggle_active(self) -> None:
@@ -184,6 +194,75 @@ class MasterTab(QWidget):
             return
         set_active(self.conn, self.table_name, row["id"], activate)
         self.refresh()
+
+
+class CustomersTab(QWidget):
+    def __init__(self, conn: sqlite3.Connection, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.conn = conn
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search name or mobile")
+        self.search.setClearButtonEnabled(True)
+        self.add_button = QPushButton("Add customer")
+        self.add_button.setObjectName("primary")
+        self.edit_button = QPushButton("Edit")
+        self.delete_button = QPushButton("Delete")
+        self.add_button.clicked.connect(self.add)
+        self.edit_button.clicked.connect(self.edit)
+        self.delete_button.clicked.connect(self.delete)
+        self.search.textChanged.connect(self.refresh)
+        self.table = DataTable([
+            Column("Name", lambda r: r["name"]),
+            Column("Mobile", lambda r: r["phone"]),
+            Column("City", lambda r: r["city"]),
+            Column("Invoices", lambda r: r["invoices"], align_right=True, sort_key=lambda r: r["invoices"]),
+            Column("Billed", lambda r: format_inr(r["billed"]), align_right=True, sort_key=lambda r: r["billed"]),
+        ])
+        self.table.doubleClicked.connect(self.edit)
+        self.table.itemSelectionChanged.connect(self._update_buttons)
+        row = QHBoxLayout()
+        for w in (self.add_button, self.edit_button, self.delete_button):
+            row.addWidget(w)
+        row.addWidget(self.search, 1)
+        layout = QVBoxLayout(self)
+        layout.addLayout(row)
+        layout.addWidget(self.table)
+        self.refresh()
+
+    def refresh(self) -> None:
+        like = f"%{self.search.text().strip()}%"
+        rows = self.conn.execute(
+            "SELECT c.*, count(i.id) AS invoices, coalesce(sum(i.grand_total), 0) AS billed FROM customer c"
+            " LEFT JOIN invoice i ON i.customer_id = c.id AND i.status = 'ACTIVE'"
+            " WHERE c.name LIKE ? OR c.phone LIKE ? GROUP BY c.id ORDER BY c.name COLLATE NOCASE",
+            (like, like),
+        ).fetchall()
+        self.table.fill(rows)
+        self._update_buttons()
+
+    def _update_buttons(self) -> None:
+        selected = self.table.selected_id() is not None
+        self.edit_button.setEnabled(selected)
+        self.delete_button.setEnabled(selected)
+
+    def add(self) -> None:
+        if CustomerDialog(self.conn, parent=self, initial_text=self.search.text()).exec():
+            self.refresh()
+
+    def edit(self) -> None:
+        customer_id = self.table.selected_id()
+        if customer_id is not None and CustomerDialog(self.conn, customer_id, self).exec():
+            self.refresh()
+
+    def delete(self) -> None:
+        customer_id = self.table.selected_id()
+        if customer_id is not None and widgets.confirm_delete(self, self.conn, "customer", customer_id,
+                                                              "this customer"):
+            self.refresh()
+
+    def showEvent(self, event) -> None:
+        self.refresh()
+        super().showEvent(event)
 
 
 class MastersPage(QWidget):
@@ -221,7 +300,9 @@ class MastersPage(QWidget):
                 Column("Phone", lambda r: r["phone"]),
             ],
         )
+        self.customers = CustomersTab(conn)
         tabs = QTabWidget()
+        tabs.addTab(self.customers, "Customers")
         tabs.addTab(self.models, "Vehicle models")
         tabs.addTab(self.financers, "Financers")
         tabs.addTab(self.insurers, "Insurance companies")

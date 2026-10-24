@@ -7,7 +7,7 @@ from logging.handlers import RotatingFileHandler
 
 from importlib import resources
 
-from PySide6.QtCore import QLockFile, QTimer
+from PySide6.QtCore import QLockFile, QProcess, QTimer
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -18,6 +18,7 @@ from jbhonda.db import open_database
 from jbhonda.db.schema import MigrationError
 
 log = logging.getLogger("jbhonda")
+_lock: QLockFile | None = None
 
 STYLE = """
 QWidget { font-size: 10.5pt; }
@@ -39,6 +40,7 @@ QLabel#cardCaption { color: #52606d; }
 QLabel#summaryValue { qproperty-alignment: AlignRight; }
 QLabel#summaryTotal { qproperty-alignment: AlignRight; font-weight: 600; font-size: 12pt; }
 QLabel#summaryValue[alert="true"] { color: #cc0000; font-weight: 600; }
+QLabel#practiceBanner { background: #f59e0b; color: #1f2933; font-weight: 600; padding: 6px; }
 QLabel#hint { background: #fff4e5; border: 1px solid #f0c36d; border-radius: 3px; padding: 6px; }
 """
 
@@ -63,6 +65,19 @@ def _excepthook(exc_type, exc, tb) -> None:
         f"{exc_type.__name__}: {exc}\n\n"
         f"Details are saved in:\n{config.data_dir() / 'logs' / 'app.log'}",
     )
+
+
+def restart_app() -> None:
+    """Start a fresh copy of the app and close this one (after switching data or erasing it)."""
+    if getattr(sys, "frozen", False):
+        program, args = sys.executable, sys.argv[1:]
+    else:
+        program, args = sys.executable, sys.argv
+    args = [a for a in args if a != "--smoke-test"]
+    if _lock is not None:
+        _lock.unlock()
+    QProcess.startDetached(program, args)
+    QApplication.quit()
 
 
 def _smoke_test(window) -> None:
@@ -99,9 +114,10 @@ def run(smoke_test: bool = False) -> int:
 
     # One copy at a time: a second window on the same data only causes confusion,
     # and the installer needs the app closed to update it.
-    lock = QLockFile(str(config.data_dir() / "app.lock"))
+    global _lock
+    lock = _lock = QLockFile(str(config.root_dir() / "app.lock"))
     lock.setStaleLockTime(0)
-    if not lock.tryLock(200):
+    if not lock.tryLock(3000):  # allow a moment for a restarting copy to exit
         QMessageBox.information(None, "Already open", "The app is already running. Look for it on the taskbar.")
         return 0
 
@@ -115,7 +131,7 @@ def run(smoke_test: bool = False) -> int:
         log.error("Cannot open database\n%s", traceback.format_exc())
         QMessageBox.critical(None, "Cannot open data", f"Could not open the database at\n{config.db_path()}")
         return 1
-    log.info("Started; database %s", config.db_path())
+    log.info("Started; database %s%s", config.db_path(), " (PRACTICE MODE)" if config.practice_mode() else "")
     try:
         made = auto_backup(conn)
         if made:

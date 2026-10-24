@@ -56,15 +56,28 @@ def migrate(conn: sqlite3.Connection, backup_dir: Path | None = None) -> int:
     if version > 0 and backup_dir is not None:
         backup_database(conn, backup_dir, label=f"before-schema-{pending[0][0]:04d}")
 
-    for number, name, sql in pending:
-        # executescript() commits any open transaction first, so wrap each file ourselves:
-        # either the whole migration applies, or none of it does.
-        try:
-            conn.executescript(f"BEGIN;\n{sql}\nPRAGMA user_version = {number};\nCOMMIT;")
-        except sqlite3.Error as exc:
-            if conn.in_transaction:
-                conn.execute("ROLLBACK")
-            raise MigrationError(f"Migration {name} failed: {exc}") from exc
+    # Rebuilding a table (the only way to change its CHECK rules in SQLite) needs foreign keys
+    # off; it can't be switched inside a transaction, so do it around all migrations and
+    # verify every reference before each commit instead.
+    fk_was_on = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        for number, name, sql in pending:
+            # executescript() commits any open transaction first, so open our own: either the
+            # whole migration applies, or none of it does.
+            try:
+                conn.executescript(f"BEGIN;\n{sql}")
+                broken = conn.execute("PRAGMA foreign_key_check").fetchall()
+                if broken:
+                    raise MigrationError(f"{len(broken)} broken references, e.g. {tuple(broken[0])}")
+                conn.execute(f"PRAGMA user_version = {number}")
+                conn.execute("COMMIT")
+            except (sqlite3.Error, MigrationError) as exc:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise MigrationError(f"Migration {name} failed: {exc}") from exc
+    finally:
+        conn.execute(f"PRAGMA foreign_keys = {'ON' if fk_was_on else 'OFF'}")
     return len(pending)
 
 

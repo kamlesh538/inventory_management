@@ -94,8 +94,23 @@ def test_ledger_is_append_only(seeded):
     _move(seeded, 5)
     with pytest.raises(sqlite3.IntegrityError):
         seeded.execute("UPDATE part_stock_movement SET quantity = 50")
-    with pytest.raises(sqlite3.IntegrityError):
+    seeded.execute(
+        "INSERT INTO invoice (id, invoice_no, invoice_type, invoice_date, bill_name)"
+        " VALUES (9, 'P9', 'PART', '2026-10-24', 'Walk-in')"
+    )
+    seeded.execute(
+        "INSERT INTO invoice_item (invoice_id, line_no, item_kind, part_id, description, hsn_code, quantity,"
+        " unit_price, taxable_value, gst_rate_bp, cgst, sgst, line_total) VALUES (9, 1, 'PART', 1, 'x', '8714', 1,"
+        " 100, 84, 1800, 8, 8, 100)"
+    )
+    with pytest.raises(sqlite3.IntegrityError):  # the part has been sold: its history is permanent
         seeded.execute("DELETE FROM part_stock_movement")
+
+
+def test_unsold_part_ledger_can_be_removed_with_the_part(seeded):
+    _move(seeded, 5)
+    seeded.execute("DELETE FROM part_stock_movement WHERE part_id = 1")
+    seeded.execute("DELETE FROM part WHERE id = 1")
 
 
 def test_payment_needs_invoice_or_booking(seeded):

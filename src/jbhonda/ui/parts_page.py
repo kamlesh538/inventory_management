@@ -226,8 +226,11 @@ class PartsPage(QWidget):
         self.adjust_button = QPushButton("Adjust stock")
         self.history_button = QPushButton("History")
         self.toggle_button = QPushButton("Deactivate")
+        self.delete_button = QPushButton("Delete")
+        self.delete_button.clicked.connect(self.delete_selected)
         self.selection_buttons = (
             self.edit_button, self.stock_in_button, self.adjust_button, self.history_button, self.toggle_button,
+            self.delete_button,
         )
         self.add_button.clicked.connect(self.add)
         self.edit_button.clicked.connect(lambda: self._open(PartDialog))
@@ -331,6 +334,12 @@ class PartsPage(QWidget):
         part = self._selected()
         if part is not None:
             PartHistoryDialog(self.conn, part["id"], self).exec()
+
+    def delete_selected(self) -> None:
+        part = self._selected()
+        if part is not None and widgets.confirm_delete(self, self.conn, "part", part["id"],
+                                                       f"part {part['part_number']}"):
+            self.refresh()
 
     def toggle_active(self) -> None:
         part = self._selected()
