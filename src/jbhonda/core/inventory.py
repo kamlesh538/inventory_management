@@ -23,25 +23,49 @@ def _check_gst_rate(gst_rate_bp: int) -> None:
 
 # ---------------------------------------------------------------- vehicles
 
-def add_vehicle_model(
+VEHICLE_CATEGORIES = ("SCOOTER", "MOTORCYCLE", "EV")
+
+
+def save_vehicle_model(
     conn: sqlite3.Connection, *, model_name: str, category: str, gst_rate_bp: int,
     ex_showroom_price: int, variant: str = "", engine_cc: int | None = None, hsn_code: str = "8711",
+    model_id: int | None = None,
 ) -> int:
-    model_name, variant = model_name.strip(), variant.strip()
+    """Add a vehicle model, or update one when model_id is given.
+
+    Changing the price or GST rate only affects future sales; old invoices keep their own copy.
+    """
+    model_name, variant, hsn_code = model_name.strip(), variant.strip(), hsn_code.strip()
     if not model_name:
         raise BusinessError("Model name is required.")
+    if category not in VEHICLE_CATEGORIES:
+        raise BusinessError("Choose a category.")
+    if not hsn_code:
+        raise BusinessError("HSN code is required.")
     _check_gst_rate(gst_rate_bp)
     _require_non_negative(ex_showroom_price, "Ex-showroom price")
+    if engine_cc is not None:
+        _require_positive(engine_cc, "Engine CC")
     with transaction(conn):
         if conn.execute(
-            "SELECT 1 FROM vehicle_model WHERE model_name = ? AND variant = ?", (model_name, variant)
+            "SELECT 1 FROM vehicle_model WHERE model_name = ? COLLATE NOCASE AND variant = ? COLLATE NOCASE"
+            " AND id IS NOT ?",
+            (model_name, variant, model_id),
         ).fetchone():
             raise BusinessError(f"Model '{f'{model_name} {variant}'.strip()}' already exists.")
-        return conn.execute(
-            "INSERT INTO vehicle_model (model_name, variant, category, engine_cc, hsn_code, gst_rate_bp, ex_showroom_price)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (model_name, variant, category, engine_cc, hsn_code.strip(), gst_rate_bp, ex_showroom_price),
-        ).lastrowid
+        values = (model_name, variant, category, engine_cc, hsn_code, gst_rate_bp, ex_showroom_price)
+        if model_id is None:
+            return conn.execute(
+                "INSERT INTO vehicle_model (model_name, variant, category, engine_cc, hsn_code, gst_rate_bp,"
+                " ex_showroom_price) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                values,
+            ).lastrowid
+        conn.execute(
+            "UPDATE vehicle_model SET model_name = ?, variant = ?, category = ?, engine_cc = ?, hsn_code = ?,"
+            f" gst_rate_bp = ?, ex_showroom_price = ?, updated_at = {NOW} WHERE id = ?",
+            (*values, model_id),
+        )
+        return model_id
 
 
 def add_vehicle(

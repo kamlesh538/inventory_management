@@ -1,6 +1,9 @@
+import os
 import sqlite3
 
 import pytest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from jbhonda.db import open_database
 

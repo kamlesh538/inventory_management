@@ -5,7 +5,7 @@ import pytest
 from jbhonda.core.customers import add_customer
 from jbhonda.core.errors import BusinessError
 from jbhonda.core.inventory import (
-    add_part, add_vehicle, add_vehicle_model, adjust_stock, low_stock_parts, purchase_part,
+    add_part, add_vehicle, save_vehicle_model, adjust_stock, low_stock_parts, purchase_part,
 )
 from jbhonda.core.numbering import next_number
 from jbhonda.core.sales import (
@@ -19,7 +19,7 @@ DAY = date(2026, 10, 24)
 @pytest.fixture
 def shop(conn):
     """A shop with one Activa in stock, a customer, and two parts."""
-    model = add_vehicle_model(
+    model = save_vehicle_model(
         conn, model_name="Activa 6G", variant="DLX", category="SCOOTER", engine_cc=110,
         gst_rate_bp=1800, ex_showroom_price=8500000,
     )
