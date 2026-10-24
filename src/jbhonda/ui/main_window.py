@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QHBoxLayout, QListWidget, QMainWindow, QStackedWid
 from jbhonda import __version__
 from jbhonda.ui.home_page import HomePage
 from jbhonda.ui.masters_page import MastersPage
+from jbhonda.ui.parts_page import PartsPage
 from jbhonda.ui.settings_page import SettingsPage
 from jbhonda.ui.vehicles_page import VehiclesPage
 
@@ -24,6 +25,7 @@ class MainWindow(QMainWindow):
         for name, page in (
             ("Home", HomePage(conn)),
             ("Vehicles", VehiclesPage(conn)),
+            ("Parts", PartsPage(conn)),
             ("Masters", MastersPage(conn)),
             ("Settings", SettingsPage(conn)),
         ):

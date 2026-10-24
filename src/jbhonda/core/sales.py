@@ -132,6 +132,11 @@ def _part_lines(conn: sqlite3.Connection, requested: Sequence[PartLine]) -> list
             )
         parts[part_id] = part
 
+    for item in requested:
+        mrp = parts[item.part_id]["mrp"]
+        if mrp and item.unit_price is not None and item.unit_price > mrp:
+            raise BusinessError(f"Price of {parts[item.part_id]['part_number']} cannot be more than its MRP.")
+
     return [
         _Line(
             item_kind="PART", vehicle_id=None, part_id=item.part_id,

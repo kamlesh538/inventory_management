@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QRegularExpression, Qt
-from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtGui import QBrush, QColor, QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHeaderView, QLineEdit,
     QMessageBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -110,9 +110,15 @@ class _SortableItem(QTableWidgetItem):
 class DataTable(QTableWidget):
     """Read-only, sortable table filled from a list of rows. Each row's id is kept for selection."""
 
-    def __init__(self, columns: Sequence[Column], parent: QWidget | None = None):
+    HIGHLIGHT = QColor("#fde8e8")
+
+    def __init__(
+        self, columns: Sequence[Column], parent: QWidget | None = None,
+        highlight: Callable[[Any], bool] | None = None,
+    ):
         super().__init__(0, len(columns), parent)
         self.columns = list(columns)
+        self.highlight = highlight
         self.setHorizontalHeaderLabels([c.title for c in columns])
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -128,6 +134,7 @@ class DataTable(QTableWidget):
         self.setSortingEnabled(False)
         self.setRowCount(len(rows))
         for r, row in enumerate(rows):
+            marked = self.highlight is not None and self.highlight(row)
             for c, column in enumerate(self.columns):
                 value = column.get(row)
                 item = _SortableItem("" if value is None else str(value))
@@ -135,6 +142,8 @@ class DataTable(QTableWidget):
                     item.setData(_SORT_ROLE, column.sort_key(row))
                 if column.align_right:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                if marked:
+                    item.setBackground(QBrush(self.HIGHLIGHT))
                 if c == 0:
                     item.setData(Qt.ItemDataRole.UserRole, row_id(row))
                 self.setItem(r, c, item)

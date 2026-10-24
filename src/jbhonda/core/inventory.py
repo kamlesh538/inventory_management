@@ -202,28 +202,57 @@ def vehicle_colors(conn: sqlite3.Connection) -> list[str]:
 
 # ---------------------------------------------------------------- parts
 
-def add_part(
+PART_CATEGORIES = ("SPARE", "ACCESSORY", "OIL", "TYRE", "BATTERY", "OTHER")
+PART_UNITS = ("PCS", "LTR", "SET")
+
+
+def save_part(
     conn: sqlite3.Connection, *, part_number: str, name: str, hsn_code: str, gst_rate_bp: int, sale_price: int,
     category: str = "SPARE", unit: str = "PCS", mrp: int = 0, reorder_level: int = 0,
     rack_location: str | None = None, opening_qty: int = 0, opening_unit_cost: int = 0,
+    part_id: int | None = None,
 ) -> int:
-    part_number, name = part_number.strip().upper(), name.strip()
+    """Add a part (with optional opening stock), or update one when part_id is given.
+
+    Stock is never set here when editing; use purchase_part or adjust_stock so the ledger stays complete.
+    """
+    part_number, name, hsn_code = part_number.strip().upper(), name.strip(), hsn_code.strip()
     if not part_number or not name:
         raise BusinessError("Part number and name are required.")
+    if not hsn_code:
+        raise BusinessError("HSN code is required.")
+    if category not in PART_CATEGORIES:
+        raise BusinessError("Choose a category.")
+    if unit not in PART_UNITS:
+        raise BusinessError("Choose a unit.")
     _check_gst_rate(gst_rate_bp)
     _require_non_negative(sale_price, "Sale price")
     _require_non_negative(mrp, "MRP")
+    if mrp and sale_price > mrp:
+        raise BusinessError("Sale price cannot be more than the MRP.")
     _require_non_negative(reorder_level, "Reorder level")
     _require_non_negative(opening_qty, "Opening stock")
+    if part_id is not None and opening_qty:
+        raise ValueError("opening stock can only be given when adding a part")
+    fields = {
+        "part_number": part_number, "name": name, "category": category, "hsn_code": hsn_code,
+        "gst_rate_bp": gst_rate_bp, "unit": unit, "mrp": mrp, "sale_price": sale_price,
+        "reorder_level": reorder_level, "rack_location": _text(rack_location, upper=True),
+    }
     with transaction(conn):
-        if conn.execute("SELECT 1 FROM part WHERE part_number = ?", (part_number,)).fetchone():
+        if conn.execute("SELECT 1 FROM part WHERE part_number = ? AND id IS NOT ?", (part_number, part_id)).fetchone():
             raise BusinessError(f"Part number {part_number} is already in the system.")
-        part_id = conn.execute(
-            "INSERT INTO part (part_number, name, category, hsn_code, gst_rate_bp, unit, mrp, sale_price,"
-            " reorder_level, rack_location) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (part_number, name, category, hsn_code.strip(), gst_rate_bp, unit, mrp, sale_price,
-             reorder_level, rack_location),
-        ).lastrowid
+        if part_id is not None:
+            assignments = ", ".join(f"{k} = ?" for k in fields)
+            updated = conn.execute(
+                f"UPDATE part SET {assignments}, updated_at = {NOW} WHERE id = ?", (*fields.values(), part_id)
+            ).rowcount
+            if not updated:
+                raise BusinessError("Part not found.")
+            return part_id
+        columns = ", ".join(fields)
+        marks = ", ".join("?" for _ in fields)
+        part_id = conn.execute(f"INSERT INTO part ({columns}) VALUES ({marks})", tuple(fields.values())).lastrowid
         if opening_qty:
             purchase_part(
                 conn, part_id=part_id, quantity=opening_qty, unit_cost=opening_unit_cost,
@@ -273,6 +302,45 @@ def adjust_stock(
             " VALUES (?, 'ADJUSTMENT', ?, ?, ?, ?)",
             (part_id, quantity_change, part["avg_cost"], (on or date.today()).isoformat(), reason.strip()),
         )
+
+
+def find_parts(
+    conn: sqlite3.Connection, *, text: str = "", category: str | None = None, low_stock_only: bool = False,
+    include_inactive: bool = False,
+) -> list[sqlite3.Row]:
+    where, args = [], []
+    if text.strip():
+        like = f"%{text.strip()}%"
+        where.append("(part_number LIKE ? OR name LIKE ? OR rack_location LIKE ?)")
+        args += [like] * 3
+    if category:
+        where.append("category = ?")
+        args.append(category)
+    if low_stock_only:
+        where.append("stock_qty <= reorder_level")
+    if not include_inactive:
+        where.append("is_active = 1")
+    return conn.execute(
+        f"SELECT *, stock_qty <= reorder_level AS is_low FROM part"
+        f" {'WHERE ' + ' AND '.join(where) if where else ''} ORDER BY name COLLATE NOCASE, part_number",
+        args,
+    ).fetchall()
+
+
+def part_history(conn: sqlite3.Connection, part_id: int) -> list[sqlite3.Row]:
+    """Every stock movement for a part, oldest first, with the running balance after each."""
+    return conn.execute(
+        """
+        SELECT m.*, i.invoice_no, i.bill_name,
+               sum(m.quantity) OVER (ORDER BY m.id) AS balance
+        FROM part_stock_movement m
+        LEFT JOIN invoice_item ii ON ii.id = m.invoice_item_id
+        LEFT JOIN invoice i ON i.id = ii.invoice_id
+        WHERE m.part_id = ?
+        ORDER BY m.id
+        """,
+        (part_id,),
+    ).fetchall()
 
 
 def low_stock_parts(conn: sqlite3.Connection) -> list[sqlite3.Row]:

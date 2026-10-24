@@ -5,7 +5,7 @@ import pytest
 from jbhonda.core.customers import add_customer
 from jbhonda.core.errors import BusinessError
 from jbhonda.core.inventory import (
-    add_part, save_vehicle, save_vehicle_model, adjust_stock, low_stock_parts, purchase_part,
+    save_part, save_vehicle, save_vehicle_model, adjust_stock, low_stock_parts, purchase_part,
 )
 from jbhonda.core.numbering import next_number
 from jbhonda.core.sales import (
@@ -31,11 +31,11 @@ def shop(conn):
         conn, name="Ramesh Kumar", phone="9876543210", relation_type="S/O", relation_name="Suresh Kumar",
         address_line1="12 Station Road", city="Agra", state="Uttar Pradesh", pincode="282001",
     )
-    helmet = add_part(
+    helmet = save_part(
         conn, part_number="HLM-001", name="Helmet", category="ACCESSORY", hsn_code="6506",
         gst_rate_bp=1800, sale_price=150000, opening_qty=5, opening_unit_cost=100000, reorder_level=2,
     )
-    filt = add_part(
+    filt = save_part(
         conn, part_number="17210-K0N-D00", name="Air Filter", hsn_code="8714", gst_rate_bp=1800,
         sale_price=35000, opening_qty=10, opening_unit_cost=25000,
     )
