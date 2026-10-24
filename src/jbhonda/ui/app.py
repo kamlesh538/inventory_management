@@ -9,6 +9,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from jbhonda import config
+from jbhonda.core.backup import auto_backup
 from jbhonda.core.errors import BusinessError
 from jbhonda.db import open_database
 from jbhonda.db.schema import MigrationError
@@ -81,6 +82,13 @@ def run() -> int:
         QMessageBox.critical(None, "Cannot open data", f"Could not open the database at\n{config.db_path()}")
         return 1
     log.info("Started; database %s", config.db_path())
+    try:
+        made = auto_backup(conn)
+        if made:
+            log.info("Daily backup written to %s", made)
+    except Exception:
+        # A failed backup must never stop the shop from working; it's logged for later.
+        log.error("Daily backup failed\n%s", traceback.format_exc())
 
     from jbhonda.ui.main_window import MainWindow  # after QApplication exists
 

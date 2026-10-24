@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QHBoxLayout, QListWidget, QMainWindow, QStackedWid
 
 from jbhonda import __version__
 from jbhonda.ui.bookings_page import BookingsPage
+from jbhonda.ui.data_page import DataPage
 from jbhonda.ui.home_page import HomePage
 from jbhonda.ui.invoices_page import InvoicesPage
 from jbhonda.ui.masters_page import MastersPage
@@ -36,6 +37,7 @@ class MainWindow(QMainWindow):
             ("Vehicles", VehiclesPage(conn)),
             ("Parts", PartsPage(conn)),
             ("Masters", MastersPage(conn)),
+            ("Export & Backup", DataPage(conn)),
             ("Settings", SettingsPage(conn)),
         ):
             self.nav.addItem(name)

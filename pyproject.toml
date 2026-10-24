@@ -5,6 +5,7 @@ description = "Inventory and billing for Jai Bajrang Bali Honda"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "openpyxl>=3.1,<4",
     "pyside6>=6.8,<6.11",
     "reportlab>=4.2,<5",
 ]
