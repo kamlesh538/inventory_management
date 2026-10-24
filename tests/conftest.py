@@ -9,6 +9,12 @@ from jbhonda.db import open_database
 
 
 @pytest.fixture(autouse=True)
+def isolated_data_dir(tmp_path, monkeypatch):
+    """Anything the app writes (PDFs, backups, logs) goes to a temp folder, never the real data folder."""
+    monkeypatch.setenv("JBH_DATA_DIR", str(tmp_path / "appdata"))
+
+
+@pytest.fixture(autouse=True)
 def no_blocking_message_boxes(monkeypatch):
     """A message box nobody expected would wait forever for a click; fail the test instead.
 
@@ -21,6 +27,16 @@ def no_blocking_message_boxes(monkeypatch):
 
     for name in ("warning", "information", "question", "critical"):
         monkeypatch.setattr(QMessageBox, name, fail)
+
+
+@pytest.fixture(autouse=True)
+def opened_files(monkeypatch):
+    """Record files the app asks to open, instead of launching a PDF viewer during tests."""
+    from jbhonda.ui import widgets
+
+    opened = []
+    monkeypatch.setattr(widgets, "open_file", opened.append)
+    return opened
 
 
 @pytest.fixture

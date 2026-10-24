@@ -16,6 +16,7 @@ from jbhonda.core.sales import PartLine
 from jbhonda.core.vehicle_sale import POLICY_TYPES, InsuranceIn, LoanIn, complete_vehicle_sale
 from jbhonda.ui import widgets
 from jbhonda.ui.customer_widgets import CustomerPicker
+from jbhonda.ui.invoices_page import offer_to_print
 from jbhonda.ui.payments import PaymentRow
 from jbhonda.ui.widgets import ChoiceCombo, FormDialog, MoneyEdit
 
@@ -475,9 +476,8 @@ class SellVehiclePage(QWidget):
         except (BusinessError, ValueError) as exc:
             widgets.show_error(self, str(exc))
             return None
-        invoice_no = self.conn.execute("SELECT invoice_no FROM invoice WHERE id = ?", (invoice_id,)).fetchone()[0]
-        widgets.show_info(self, f"Invoice {invoice_no} created.")
         self.reset()
+        offer_to_print(self, self.conn, invoice_id)
         return invoice_id
 
     def reset(self) -> None:

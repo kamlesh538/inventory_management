@@ -4,8 +4,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QRegularExpression, Qt
-from PySide6.QtGui import QBrush, QColor, QRegularExpressionValidator
+from PySide6.QtCore import QRegularExpression, Qt, QUrl
+from PySide6.QtGui import QBrush, QColor, QDesktopServices, QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHeaderView, QLineEdit,
     QMessageBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -35,6 +35,11 @@ def show_info(parent: QWidget | None, message: str) -> None:
 
 def confirm(parent: QWidget | None, message: str) -> bool:
     return QMessageBox.question(parent, "Please confirm", message) == QMessageBox.StandardButton.Yes
+
+
+def open_file(path) -> None:
+    """Open a file (e.g. an invoice PDF) in the PC's default program, ready to print."""
+    QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 
 class MoneyEdit(QLineEdit):

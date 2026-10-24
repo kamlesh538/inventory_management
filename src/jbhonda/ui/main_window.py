@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QHBoxLayout, QListWidget, QMainWindow, QStackedWid
 from jbhonda import __version__
 from jbhonda.ui.bookings_page import BookingsPage
 from jbhonda.ui.home_page import HomePage
+from jbhonda.ui.invoices_page import InvoicesPage
 from jbhonda.ui.masters_page import MastersPage
 from jbhonda.ui.parts_page import PartsPage
 from jbhonda.ui.sell_parts_page import SellPartsPage
@@ -31,6 +32,7 @@ class MainWindow(QMainWindow):
             ("Sell Vehicle", self.sell_vehicle),
             ("Sell Parts", SellPartsPage(conn)),
             ("Bookings", BookingsPage(conn, on_sell=self.sell_booking)),
+            ("Invoices", InvoicesPage(conn)),
             ("Vehicles", VehiclesPage(conn)),
             ("Parts", PartsPage(conn)),
             ("Masters", MastersPage(conn)),

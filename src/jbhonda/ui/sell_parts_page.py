@@ -18,6 +18,7 @@ from jbhonda.core.sales import WALK_IN_NAME, PartLine, complete_part_sale
 from jbhonda.core.validation import normalize_mobile
 from jbhonda.ui import widgets
 from jbhonda.ui.customer_widgets import CustomerPicker
+from jbhonda.ui.invoices_page import offer_to_print
 from jbhonda.ui.payments import PaymentRow
 from jbhonda.ui.widgets import MoneyEdit
 
@@ -294,9 +295,8 @@ class SellPartsPage(QWidget):
         except (BusinessError, ValueError) as exc:
             widgets.show_error(self, str(exc))
             return None
-        invoice_no = self.conn.execute("SELECT invoice_no FROM invoice WHERE id = ?", (invoice_id,)).fetchone()[0]
-        widgets.show_info(self, f"Bill {invoice_no} created.")
         self.reset()
+        offer_to_print(self, self.conn, invoice_id)
         return invoice_id
 
     def reset(self) -> None:
