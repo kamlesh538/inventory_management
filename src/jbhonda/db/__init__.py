@@ -1,4 +1,4 @@
-from jbhonda.db.connection import connect, open_database
+from jbhonda.db.connection import NOW, connect, open_database, transaction
 from jbhonda.db.schema import migrate
 
-__all__ = ["connect", "migrate", "open_database"]
+__all__ = ["NOW", "connect", "migrate", "open_database", "transaction"]

@@ -1,8 +1,16 @@
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
+from itertools import count
 from pathlib import Path
 
 from jbhonda import config
 from jbhonda.db.schema import migrate
+
+# SQL expression for "now" in the same format as the schema's created_at/updated_at defaults.
+NOW = "strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')"
+
+_savepoint_ids = count(1)
 
 
 def connect(path: Path | str) -> sqlite3.Connection:
@@ -22,3 +30,27 @@ def open_database(path: Path | str | None = None) -> sqlite3.Connection:
     conn = connect(path)
     migrate(conn, backup_dir=path.parent / "backups")
     return conn
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """Run a block all-or-nothing. Nests safely: an inner block becomes a savepoint."""
+    if conn.in_transaction:
+        name = f"sp{next(_savepoint_ids)}"
+        conn.execute(f"SAVEPOINT {name}")
+        try:
+            yield conn
+        except BaseException:
+            conn.execute(f"ROLLBACK TO {name}")
+            conn.execute(f"RELEASE {name}")
+            raise
+        conn.execute(f"RELEASE {name}")
+        return
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield conn
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    conn.execute("COMMIT")
