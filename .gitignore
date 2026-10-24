@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+build/
+dist/
+*.spec
+!packaging/jbhonda.spec
+*.db
+*.db-wal
+*.db-shm
