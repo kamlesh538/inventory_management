@@ -17,6 +17,14 @@ from jbhonda.core.money import format_inr, to_paise
 GST_RATES_BP = (0, 500, 1200, 1800, 2800, 4000)
 
 
+def format_date(iso: str | None) -> str:
+    """'2026-10-24' -> '24-10-2026' (how dates are read in India)."""
+    if not iso:
+        return ""
+    y, m, d = iso[:10].split("-")
+    return f"{d}-{m}-{y}"
+
+
 def show_error(parent: QWidget | None, message: str) -> None:
     QMessageBox.warning(parent, "Please check", message)
 
@@ -85,6 +93,18 @@ class Column:
     title: str
     get: Callable[[Any], Any]
     align_right: bool = False
+    sort_key: Callable[[Any], Any] | None = None  # e.g. paise for a ₹ column, ISO date for a dd-mm-yyyy one
+
+
+_SORT_ROLE = Qt.ItemDataRole.UserRole + 1
+
+
+class _SortableItem(QTableWidgetItem):
+    def __lt__(self, other: QTableWidgetItem) -> bool:
+        mine, theirs = self.data(_SORT_ROLE), other.data(_SORT_ROLE)
+        if mine is None or theirs is None:
+            return (mine is None) and (theirs is not None) or super().__lt__(other)
+        return mine < theirs
 
 
 class DataTable(QTableWidget):
@@ -101,6 +121,8 @@ class DataTable(QTableWidget):
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.horizontalHeader().setStretchLastSection(True)
+        # Keep the order rows are given in until the user clicks a column header.
+        self.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
 
     def fill(self, rows: Sequence[Any], row_id: Callable[[Any], int] = lambda r: r["id"]) -> None:
         self.setSortingEnabled(False)
@@ -108,7 +130,9 @@ class DataTable(QTableWidget):
         for r, row in enumerate(rows):
             for c, column in enumerate(self.columns):
                 value = column.get(row)
-                item = QTableWidgetItem("" if value is None else str(value))
+                item = _SortableItem("" if value is None else str(value))
+                if column.sort_key is not None:
+                    item.setData(_SORT_ROLE, column.sort_key(row))
                 if column.align_right:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 if c == 0:
@@ -135,20 +159,26 @@ class FormDialog(QDialog):
         self.setWindowTitle(title)
         self.setMinimumWidth(420)
         self.form = QFormLayout()
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
         layout.addLayout(self.form)
-        layout.addWidget(buttons)
+        layout.addWidget(self.buttons)
 
     def save(self) -> None:
         raise NotImplementedError
 
-    def accept(self) -> None:
+    def try_save(self) -> bool:
         try:
             self.save()
         except (BusinessError, ValueError) as exc:
             show_error(self, str(exc))
-            return
-        super().accept()
+            return False
+        return True
+
+    def accept(self) -> None:
+        if self.try_save():
+            super().accept()

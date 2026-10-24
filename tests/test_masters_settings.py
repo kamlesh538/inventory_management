@@ -4,7 +4,7 @@ import pytest
 
 from jbhonda.core.dashboard import summary
 from jbhonda.core.errors import BusinessError
-from jbhonda.core.inventory import add_part, add_vehicle, save_vehicle_model
+from jbhonda.core.inventory import add_part, save_vehicle, save_vehicle_model
 from jbhonda.core.masters import save_financer, save_insurer, set_active
 from jbhonda.core.sales import PartLine, sell_parts
 from jbhonda.core.settings import get_settings, update_settings
@@ -73,7 +73,7 @@ def test_inactive_model_cannot_take_new_stock(conn):
     m = save_vehicle_model(conn, model_name="Dio", category="SCOOTER", gst_rate_bp=1800, ex_showroom_price=1)
     set_active(conn, "vehicle_model", m, False)
     with pytest.raises(BusinessError, match="no longer active"):
-        add_vehicle(conn, vehicle_model_id=m, chassis_number="C1", engine_number="E1", color="Red")
+        save_vehicle(conn, vehicle_model_id=m, chassis_number="C1", engine_number="E1", color="Red")
 
 
 def test_financer_and_insurer(conn):
@@ -95,7 +95,7 @@ def test_financer_and_insurer(conn):
 
 def test_dashboard_summary(conn):
     m = save_vehicle_model(conn, model_name="Dio", category="SCOOTER", gst_rate_bp=1800, ex_showroom_price=1)
-    add_vehicle(conn, vehicle_model_id=m, chassis_number="C1", engine_number="E1", color="Red")
+    save_vehicle(conn, vehicle_model_id=m, chassis_number="C1", engine_number="E1", color="Red")
     p = add_part(conn, part_number="P1", name="Plug", hsn_code="8511", gst_rate_bp=1800, sale_price=10000,
                  opening_qty=3, reorder_level=2)
     sell_parts(conn, lines=[PartLine(p, 1)], on=date(2026, 10, 20))

@@ -19,7 +19,7 @@ Target: Windows 10/11, 64-bit. Single installer `.exe`; data in
 1. [x] Project skeleton, database, migrations, full schema, tests
 2. [x] Core logic: GST maths, invoice numbering per financial year, stock ledger, sell/cancel rules
 3. [x] Main window, shop settings, masters (vehicle models, financers, insurers)
-4. [ ] Vehicles: add / show
+4. [x] Vehicles: add / show
 5. [ ] Parts: add / stock-in / show, low-stock highlight
 6. [ ] Sell vehicle: customer, booking, payments, loan, insurance → invoice
 7. [ ] Sell parts: counter sale

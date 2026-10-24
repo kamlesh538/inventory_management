@@ -5,7 +5,7 @@ import pytest
 from jbhonda.core.customers import add_customer
 from jbhonda.core.errors import BusinessError
 from jbhonda.core.inventory import (
-    add_part, add_vehicle, save_vehicle_model, adjust_stock, low_stock_parts, purchase_part,
+    add_part, save_vehicle, save_vehicle_model, adjust_stock, low_stock_parts, purchase_part,
 )
 from jbhonda.core.numbering import next_number
 from jbhonda.core.sales import (
@@ -23,7 +23,7 @@ def shop(conn):
         conn, model_name="Activa 6G", variant="DLX", category="SCOOTER", engine_cc=110,
         gst_rate_bp=1800, ex_showroom_price=8500000,
     )
-    vehicle = add_vehicle(
+    vehicle = save_vehicle(
         conn, vehicle_model_id=model, chassis_number=" me4jf91aapg000001 ", engine_number="jf91eg0000001",
         color="Pearl White", purchase_taxable_value=6800000, purchase_gst_amount=1224000,
     )
@@ -73,7 +73,7 @@ def test_chassis_and_engine_numbers_are_normalised_and_unique(conn, shop):
     row = conn.execute("SELECT chassis_number, engine_number FROM vehicle").fetchone()
     assert tuple(row) == ("ME4JF91AAPG000001", "JF91EG0000001")
     with pytest.raises(BusinessError, match="chassis number ME4JF91AAPG000001"):
-        add_vehicle(conn, vehicle_model_id=shop["model"], chassis_number="ME4JF91AAPG000001",
+        save_vehicle(conn, vehicle_model_id=shop["model"], chassis_number="ME4JF91AAPG000001",
                     engine_number="NEW", color="Red")
 
 

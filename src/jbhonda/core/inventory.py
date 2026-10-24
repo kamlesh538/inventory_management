@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from datetime import date
 
@@ -68,42 +69,135 @@ def save_vehicle_model(
         return model_id
 
 
-def add_vehicle(
+VEHICLE_STATUSES = ("IN_STOCK", "BOOKED", "SOLD", "RETURNED_TO_OEM")
+
+# Fields that can still be changed once a vehicle is sold; the rest are printed on its invoice.
+_EDITABLE_AFTER_SALE = {"registration_number", "notes"}
+
+_MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def _text(value: str | None, upper: bool = False) -> str | None:
+    value = (value or "").strip()
+    return (value.upper() if upper else value) or None
+
+
+def save_vehicle(
     conn: sqlite3.Connection, *, vehicle_model_id: int, chassis_number: str, engine_number: str, color: str,
     key_number: str | None = None, battery_number: str | None = None, manufacturing_month: str | None = None,
     purchase_invoice_no: str | None = None, purchase_date: date | None = None,
-    purchase_taxable_value: int = 0, purchase_gst_amount: int = 0, notes: str | None = None,
+    purchase_taxable_value: int = 0, purchase_gst_amount: int = 0, registration_number: str | None = None,
+    notes: str | None = None, vehicle_id: int | None = None,
 ) -> int:
-    chassis_number = chassis_number.strip().upper()
-    engine_number = engine_number.strip().upper()
-    if not chassis_number or not engine_number:
+    """Add a vehicle to stock, or update one when vehicle_id is given.
+
+    Once sold, only the registration number and notes can change; cancel the invoice to fix the rest.
+    """
+    fields = {
+        "vehicle_model_id": vehicle_model_id,
+        "chassis_number": _text(chassis_number, upper=True),
+        "engine_number": _text(engine_number, upper=True),
+        "color": _text(color),
+        "key_number": _text(key_number, upper=True),
+        "battery_number": _text(battery_number, upper=True),
+        "manufacturing_month": _text(manufacturing_month),
+        "purchase_invoice_no": _text(purchase_invoice_no, upper=True),
+        "purchase_date": purchase_date.isoformat() if purchase_date else None,
+        "purchase_taxable_value": purchase_taxable_value,
+        "purchase_gst_amount": purchase_gst_amount,
+        "registration_number": _text(registration_number, upper=True),
+        "notes": _text(notes),
+    }
+    if not fields["chassis_number"] or not fields["engine_number"]:
         raise BusinessError("Chassis number and engine number are required.")
-    if not color.strip():
+    if not fields["color"]:
         raise BusinessError("Colour is required.")
+    if fields["manufacturing_month"] and not _MONTH.match(fields["manufacturing_month"]):
+        raise BusinessError("Manufacturing month must look like 2026-08.")
+    if purchase_date and purchase_date > date.today():
+        raise BusinessError("Purchase date cannot be in the future.")
     _require_non_negative(purchase_taxable_value, "Purchase price")
     _require_non_negative(purchase_gst_amount, "Purchase GST")
+
     with transaction(conn):
+        existing = None
+        if vehicle_id is not None:
+            existing = conn.execute("SELECT * FROM vehicle WHERE id = ?", (vehicle_id,)).fetchone()
+            if existing is None:
+                raise BusinessError("Vehicle not found.")
+            if existing["status"] == "SOLD":
+                changed = {k for k, v in fields.items() if existing[k] != v} - _EDITABLE_AFTER_SALE
+                if changed:
+                    raise BusinessError(
+                        "This vehicle is sold, so only the registration number and notes can be changed. "
+                        "To correct other details, cancel its invoice first."
+                    )
+
         model = conn.execute("SELECT is_active FROM vehicle_model WHERE id = ?", (vehicle_model_id,)).fetchone()
         if model is None:
             raise BusinessError("Choose a vehicle model.")
-        if not model["is_active"]:
+        model_changed = existing is None or existing["vehicle_model_id"] != vehicle_model_id
+        if not model["is_active"] and model_changed:
             raise BusinessError("That vehicle model is no longer active.")
-        for column, value, label in (
-            ("chassis_number", chassis_number, "chassis"),
-            ("engine_number", engine_number, "engine"),
-        ):
-            if conn.execute(f"SELECT 1 FROM vehicle WHERE {column} = ?", (value,)).fetchone():
-                raise BusinessError(f"A vehicle with {label} number {value} is already in the system.")
-        return conn.execute(
-            "INSERT INTO vehicle (vehicle_model_id, chassis_number, engine_number, color, key_number, battery_number,"
-            " manufacturing_month, purchase_invoice_no, purchase_date, purchase_taxable_value, purchase_gst_amount, notes)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                vehicle_model_id, chassis_number, engine_number, color.strip(), key_number, battery_number,
-                manufacturing_month, purchase_invoice_no, purchase_date.isoformat() if purchase_date else None,
-                purchase_taxable_value, purchase_gst_amount, notes,
-            ),
-        ).lastrowid
+        for column, label in (("chassis_number", "chassis"), ("engine_number", "engine")):
+            if conn.execute(
+                f"SELECT 1 FROM vehicle WHERE {column} = ? AND id IS NOT ?", (fields[column], vehicle_id)
+            ).fetchone():
+                raise BusinessError(f"A vehicle with {label} number {fields[column]} is already in the system.")
+
+        if existing is None:
+            columns = ", ".join(fields)
+            marks = ", ".join("?" for _ in fields)
+            return conn.execute(f"INSERT INTO vehicle ({columns}) VALUES ({marks})", tuple(fields.values())).lastrowid
+        assignments = ", ".join(f"{k} = ?" for k in fields)
+        conn.execute(
+            f"UPDATE vehicle SET {assignments}, updated_at = {NOW} WHERE id = ?", (*fields.values(), vehicle_id)
+        )
+        return vehicle_id
+
+
+def find_vehicles(
+    conn: sqlite3.Connection, *, text: str = "", vehicle_model_id: int | None = None, color: str | None = None,
+    status: str | None = None,
+) -> list[sqlite3.Row]:
+    """Vehicles with their model and, if sold, the active invoice and buyer."""
+    where, args = [], []
+    if text.strip():
+        like = f"%{text.strip()}%"
+        where.append(
+            "(v.chassis_number LIKE ? OR v.engine_number LIKE ? OR v.key_number LIKE ?"
+            " OR v.registration_number LIKE ? OR m.model_name LIKE ? OR s.bill_name LIKE ?)"
+        )
+        args += [like] * 6
+    if vehicle_model_id is not None:
+        where.append("v.vehicle_model_id = ?")
+        args.append(vehicle_model_id)
+    if color:
+        where.append("v.color = ? COLLATE NOCASE")
+        args.append(color)
+    if status:
+        where.append("v.status = ?")
+        args.append(status)
+    return conn.execute(
+        f"""
+        SELECT v.*, m.model_name, m.variant, s.invoice_id, s.invoice_no, s.invoice_date, s.bill_name
+        FROM vehicle v
+        JOIN vehicle_model m ON m.id = v.vehicle_model_id
+        LEFT JOIN (
+            SELECT ii.vehicle_id, i.id AS invoice_id, i.invoice_no, i.invoice_date, i.bill_name
+            FROM invoice_item ii JOIN invoice i ON i.id = ii.invoice_id
+            WHERE i.status = 'ACTIVE' AND ii.vehicle_id IS NOT NULL
+        ) s ON s.vehicle_id = v.id
+        {"WHERE " + " AND ".join(where) if where else ""}
+        ORDER BY CASE v.status WHEN 'IN_STOCK' THEN 0 WHEN 'BOOKED' THEN 1 WHEN 'SOLD' THEN 2 ELSE 3 END,
+                 coalesce(s.invoice_date, v.purchase_date) DESC, v.id DESC
+        """,
+        args,
+    ).fetchall()
+
+
+def vehicle_colors(conn: sqlite3.Connection) -> list[str]:
+    return [r[0] for r in conn.execute("SELECT DISTINCT color FROM vehicle ORDER BY color COLLATE NOCASE")]
 
 
 # ---------------------------------------------------------------- parts

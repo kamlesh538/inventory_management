@@ -8,6 +8,21 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from jbhonda.db import open_database
 
 
+@pytest.fixture(autouse=True)
+def no_blocking_message_boxes(monkeypatch):
+    """A message box nobody expected would wait forever for a click; fail the test instead.
+
+    Tests that expect a message patch jbhonda.ui.widgets helpers, which never reach these.
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    def fail(*args, **kwargs):
+        raise AssertionError(f"Unexpected message box: {args[1:3]}")
+
+    for name in ("warning", "information", "question", "critical"):
+        monkeypatch.setattr(QMessageBox, name, fail)
+
+
 @pytest.fixture
 def db_path(tmp_path):
     return tmp_path / "data.db"

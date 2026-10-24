@@ -31,6 +31,7 @@ QFrame#card { background: white; border: 1px solid #d9dde3; border-radius: 6px; 
 QFrame#card[alert="true"] { border: 2px solid #cc0000; }
 QLabel#cardValue { font-size: 20pt; font-weight: 600; }
 QLabel#cardCaption { color: #52606d; }
+QLabel#hint { background: #fff4e5; border: 1px solid #f0c36d; border-radius: 3px; padding: 6px; }
 """
 
 
@@ -80,7 +81,7 @@ def run() -> int:
     from jbhonda.ui.main_window import MainWindow  # after QApplication exists
 
     window = MainWindow(conn)
-    window.show()
+    window.showMaximized()
     code = app.exec()
     conn.close()
     return code

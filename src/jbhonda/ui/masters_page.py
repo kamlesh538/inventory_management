@@ -200,7 +200,8 @@ class MastersPage(QWidget):
                 Column("CC", lambda r: r["engine_cc"], align_right=True),
                 Column("HSN", lambda r: r["hsn_code"]),
                 Column("GST", lambda r: f"{r['gst_rate_bp'] / 100:g}%", align_right=True),
-                Column("Ex-showroom price", lambda r: format_inr(r["ex_showroom_price"]), align_right=True),
+                Column("Ex-showroom price", lambda r: format_inr(r["ex_showroom_price"]), align_right=True,
+                       sort_key=lambda r: r["ex_showroom_price"]),
             ],
         )
         self.financers = MasterTab(

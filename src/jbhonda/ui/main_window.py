@@ -6,6 +6,7 @@ from jbhonda import __version__
 from jbhonda.ui.home_page import HomePage
 from jbhonda.ui.masters_page import MastersPage
 from jbhonda.ui.settings_page import SettingsPage
+from jbhonda.ui.vehicles_page import VehiclesPage
 
 
 class MainWindow(QMainWindow):
@@ -22,6 +23,7 @@ class MainWindow(QMainWindow):
         self.page_by_name: dict[str, QWidget] = {}
         for name, page in (
             ("Home", HomePage(conn)),
+            ("Vehicles", VehiclesPage(conn)),
             ("Masters", MastersPage(conn)),
             ("Settings", SettingsPage(conn)),
         ):
