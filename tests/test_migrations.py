@@ -84,3 +84,40 @@ def test_newer_database_is_refused(conn):
     conn.execute("PRAGMA user_version = 999")
     with pytest.raises(MigrationError, match="newer version"):
         migrate(conn)
+
+
+def test_upgrade_from_v1_keeps_all_data(tmp_path, monkeypatch):
+    """A shop running schema 1 with real sales upgrades to the latest schema without losing anything."""
+    from jbhonda.core.customers import save_customer
+    from jbhonda.core.inventory import save_part, save_vehicle, save_vehicle_model
+    from jbhonda.core.sales import PartLine, PaymentIn, cancel_invoice, complete_part_sale
+    from jbhonda.core.vehicle_sale import complete_vehicle_sale
+    from jbhonda.db import connect, schema
+
+    real = available_migrations()
+    monkeypatch.setattr(schema, "available_migrations", lambda: real[:1])
+    conn = connect(tmp_path / "old.db")
+    migrate(conn)
+    m = save_vehicle_model(conn, model_name="Activa", category="SCOOTER", gst_rate_bp=1800, ex_showroom_price=8500000)
+    v = save_vehicle(conn, vehicle_model_id=m, chassis_number="C1", engine_number="E1", color="Red")
+    c = save_customer(conn, name="Ram", phone="9876543210")
+    p = save_part(conn, part_number="P1", name="Plug", hsn_code="8511", gst_rate_bp=1800, sale_price=14000,
+                  opening_qty=10)
+    complete_vehicle_sale(conn, customer_id=c, vehicle_id=v, accessories=[PartLine(p, 1)],
+                          payments=[PaymentIn("CASH", 8514000)])
+    cancel_invoice(conn, complete_part_sale(conn, lines=[PartLine(p, 2)], payments=[PaymentIn("CASH", 28000)]), "x")
+    tables = ("invoice", "invoice_item", "part_stock_movement", "invoice_sequence", "payment", "vehicle", "part")
+    before = {t: [tuple(r) for r in conn.execute(f"SELECT * FROM {t} ORDER BY id")] for t in tables}
+
+    monkeypatch.setattr(schema, "available_migrations", lambda: real)
+    assert migrate(conn, backup_dir=tmp_path / "backups") == len(real) - 1
+    for t in tables:
+        after = [tuple(r)[:len(before[t][0])] for r in conn.execute(f"SELECT * FROM {t} ORDER BY id")]
+        assert after == before[t], t
+    assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert len(list((tmp_path / "backups").iterdir())) == 1  # backed up before upgrading
+    # The rules still hold after the rebuild
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("DELETE FROM invoice")
+    conn.close()

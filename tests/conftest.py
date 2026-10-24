@@ -30,6 +30,17 @@ def no_blocking_message_boxes(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def printed_files(monkeypatch):
+    """Record print requests instead of showing the print dialog; post-sale prompts answer 'Close'."""
+    from jbhonda.ui import widgets
+
+    printed = []
+    monkeypatch.setattr(widgets, "print_pdf", lambda parent, path: printed.append(path) or True)
+    monkeypatch.setattr(widgets, "choose", lambda parent, title, message, options: "Close")
+    return printed
+
+
+@pytest.fixture(autouse=True)
 def opened_files(monkeypatch):
     """Record files the app asks to open, instead of launching a PDF viewer during tests."""
     from jbhonda.ui import widgets

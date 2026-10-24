@@ -39,7 +39,7 @@ def sales_register(conn: sqlite3.Connection, date_from: date | None, date_to: da
     args: list = []
     rows = conn.execute(
         f"""
-        SELECT i.invoice_no, i.invoice_date, CASE i.invoice_type WHEN 'VEHICLE' THEN 'Vehicle' ELSE 'Parts' END,
+        SELECT i.invoice_no, i.invoice_date, CASE i.invoice_type WHEN 'VEHICLE' THEN 'Vehicle' WHEN 'SERVICE' THEN 'Service' ELSE 'Parts' END,
                i.bill_name, i.bill_phone, i.bill_gstin, i.total_taxable, i.total_cgst, i.total_sgst, i.round_off,
                i.grand_total,
                (SELECT coalesce(sum(amount), 0) FROM payment p WHERE p.invoice_id = i.id),

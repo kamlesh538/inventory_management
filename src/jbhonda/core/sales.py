@@ -235,8 +235,9 @@ def _part_lines(conn: sqlite3.Connection, requested: Sequence[PartLine]) -> list
 def _create_invoice(
     conn: sqlite3.Connection, invoice_type: str, on: date, snapshot: dict[str, str | None], lines: list[_Line],
     *, customer_id: int | None, booking_id: int | None = None, hypothecated_to: str | None = None,
-    notes: str | None = None,
+    notes: str | None = None, take_parts_from_stock: bool = True,
 ) -> int:
+    """take_parts_from_stock=False when the parts already left stock (issued to a service job card)."""
     taxed = []
     for line in lines:
         if line.unit_price < 0:
@@ -271,7 +272,7 @@ def _create_invoice(
                 tax.cgst, tax.sgst, tax.gross, line.unit_cost,
             ),
         ).lastrowid
-        if line.part_id is not None:
+        if line.part_id is not None and take_parts_from_stock:
             conn.execute(
                 "INSERT INTO part_stock_movement (part_id, movement_type, quantity, unit_cost, reference_no,"
                 " invoice_item_id, movement_date) VALUES (?, 'SALE', ?, ?, ?, ?, ?)",
@@ -314,13 +315,22 @@ def cancel_invoice(conn: sqlite3.Connection, invoice_id: int, reason: str, on: d
                 f"UPDATE payment SET invoice_id = NULL, updated_at = {NOW} WHERE invoice_id = ? AND booking_id = ?",
                 (invoice_id, invoice["booking_id"]),
             )
+        if invoice["invoice_type"] == "SERVICE":
+            # Parts stay issued to the job card, which re-opens so it can be corrected and billed again
+            # (or cancelled, which returns its parts to stock).
+            conn.execute(
+                f"UPDATE service_job SET status = 'OPEN', invoice_id = NULL, delivered_at = NULL, updated_at = {NOW}"
+                " WHERE invoice_id = ?",
+                (invoice_id,),
+            )
+            return
         for item in conn.execute("SELECT * FROM invoice_item WHERE invoice_id = ?", (invoice_id,)).fetchall():
             if item["vehicle_id"] is not None:
                 conn.execute(
                     f"UPDATE vehicle SET status = 'IN_STOCK', updated_at = {NOW} WHERE id = ? AND status = 'SOLD'",
                     (item["vehicle_id"],),
                 )
-            else:
+            elif item["part_id"] is not None:
                 conn.execute(
                     "INSERT INTO part_stock_movement (part_id, movement_type, quantity, unit_cost, reference_no,"
                     " invoice_item_id, movement_date, notes) VALUES (?, 'SALE_CANCEL', ?, ?, ?, ?, ?, ?)",

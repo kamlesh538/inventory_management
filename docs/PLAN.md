@@ -34,3 +34,10 @@ uv sync
 uv run pytest
 JBH_DATA_DIR=./devdata uv run jbhonda
 ```
+
+## After v1 (requested 2026-10-24)
+
+11. [x] Servicing: job cards, parts issued from stock, labour price list, free services, service invoices
+12. [x] Sales report: period, vehicle/parts/service, loan or direct, payment mode; Excel export
+13. [x] Delete unused records; practice mode; erase-all for going live
+14. [x] Print invoices directly (Windows print dialog, A4)

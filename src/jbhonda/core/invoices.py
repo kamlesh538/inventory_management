@@ -71,6 +71,7 @@ class InvoiceDetail:
     vehicle: sqlite3.Row | None   # current record of the vehicle sold, for key/battery/mfg details
     booking_no: str | None
     hsn_summary: list[HsnRow]
+    job: sqlite3.Row | None = None  # the service job card, for SERVICE invoices
 
     @property
     def paid(self) -> int:
@@ -112,5 +113,6 @@ def invoice_detail(conn: sqlite3.Connection, invoice_id: int) -> InvoiceDetail:
         totals[2] += item["sgst"]
     hsn_summary = [HsnRow(hsn, rate, *t) for (hsn, rate), t in sorted(groups.items())]
 
+    job = conn.execute("SELECT * FROM service_job WHERE invoice_id = ?", (invoice_id,)).fetchone()
     return InvoiceDetail(invoice, items, payments, loan, insurance, vehicle,
-                         booking["booking_no"] if booking else None, hsn_summary)
+                         booking["booking_no"] if booking else None, hsn_summary, job)

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 
 from jbhonda.core.errors import BusinessError
 from jbhonda.core.inventory import VEHICLE_CATEGORIES, save_vehicle_model
-from jbhonda.core.masters import save_financer, save_insurer, set_active
+from jbhonda.core.masters import save_financer, save_insurer, save_labour_item, set_active
 from jbhonda.core.money import format_inr
 from jbhonda.ui import widgets
 from jbhonda.ui.customer_widgets import CustomerDialog
@@ -108,6 +108,34 @@ class InsurerDialog(FormDialog):
             self.conn, insurer_id=self.insurer_id, name=self.name.text(),
             contact_person=self.contact.text(), phone=self.phone.text(),
         )
+
+
+class LabourItemDialog(FormDialog):
+    def __init__(self, conn: sqlite3.Connection, item_id: int | None = None, parent: QWidget | None = None):
+        super().__init__("Edit labour item" if item_id else "Add labour item", parent)
+        self.conn, self.item_id = conn, item_id
+        self.name = QLineEdit()
+        self.charge = MoneyEdit()
+        self.sac = QLineEdit("998714")
+        self.gst_rate = GstRateCombo()
+        self.gst_rate.setValue(1800)
+        self.form.addRow("Labour *", self.name)
+        self.form.addRow("Charge (incl. GST) *", self.charge)
+        self.form.addRow("SAC code *", self.sac)
+        self.form.addRow("GST rate", self.gst_rate)
+        if item_id:
+            row = conn.execute("SELECT * FROM labour_item WHERE id = ?", (item_id,)).fetchone()
+            self.name.setText(row["name"])
+            self.charge.setValue(row["default_charge"])
+            self.sac.setText(row["sac_code"])
+            self.gst_rate.setValue(row["gst_rate_bp"])
+
+    def save(self) -> None:
+        charge = self.charge.value()
+        if charge is None:
+            raise BusinessError("Enter the charge (0 if free).")
+        save_labour_item(self.conn, labour_item_id=self.item_id, name=self.name.text(), default_charge=charge,
+                         sac_code=self.sac.text(), gst_rate_bp=self.gst_rate.value())
 
 
 # ---------------------------------------------------------------- list tabs
@@ -300,12 +328,23 @@ class MastersPage(QWidget):
                 Column("Phone", lambda r: r["phone"]),
             ],
         )
+        self.labour = MasterTab(
+            conn, table="labour_item", noun="labour item", order_by="name", dialog=LabourItemDialog,
+            columns=[
+                Column("Labour", lambda r: r["name"]),
+                Column("Charge", lambda r: format_inr(r["default_charge"]), align_right=True,
+                       sort_key=lambda r: r["default_charge"]),
+                Column("SAC", lambda r: r["sac_code"]),
+                Column("GST", lambda r: f"{r['gst_rate_bp'] / 100:g}%", align_right=True),
+            ],
+        )
         self.customers = CustomersTab(conn)
         tabs = QTabWidget()
         tabs.addTab(self.customers, "Customers")
         tabs.addTab(self.models, "Vehicle models")
         tabs.addTab(self.financers, "Financers")
         tabs.addTab(self.insurers, "Insurance companies")
+        tabs.addTab(self.labour, "Labour charges")
         layout = QVBoxLayout(self)
         layout.addWidget(title)
         layout.addWidget(tabs)

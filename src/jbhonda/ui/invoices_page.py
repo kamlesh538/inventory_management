@@ -20,6 +20,7 @@ from jbhonda.ui import widgets
 from jbhonda.ui.payments import PAYMENT_MODE_CHOICES
 from jbhonda.ui.widgets import ChoiceCombo, Column, DataTable, FormDialog, MoneyEdit, format_date
 
+TYPE_LABELS = {"VEHICLE": "Vehicle", "PART": "Parts", "SERVICE": "Service"}
 LOAN_LABELS = {"APPLIED": "Applied", "SANCTIONED": "Awaiting bank", "DISBURSED": "Received", "REJECTED": "Rejected"}
 
 
@@ -28,10 +29,17 @@ def open_invoice_pdf(conn: sqlite3.Connection, invoice_id: int) -> None:
     widgets.open_file(write_invoice_pdf(conn, invoice_id))
 
 
+def print_invoice(parent: QWidget, conn: sqlite3.Connection, invoice_id: int) -> bool:
+    return widgets.print_pdf(parent, write_invoice_pdf(conn, invoice_id))
+
+
 def offer_to_print(parent: QWidget, conn: sqlite3.Connection, invoice_id: int) -> None:
-    """After a sale: say it's done and offer to open the invoice."""
+    """After a sale: say it's done and offer to print or view the invoice."""
     invoice_no = conn.execute("SELECT invoice_no FROM invoice WHERE id = ?", (invoice_id,)).fetchone()[0]
-    if widgets.confirm(parent, f"Invoice {invoice_no} created.\n\nOpen it now to print?"):
+    choice = widgets.choose(parent, "Saved", f"Invoice {invoice_no} created.", ["Print", "View PDF", "Close"])
+    if choice == "Print":
+        print_invoice(parent, conn, invoice_id)
+    elif choice == "View PDF":
         open_invoice_pdf(conn, invoice_id)
 
 
@@ -132,8 +140,10 @@ class InvoicesPage(QWidget):
         title = QLabel("Invoices")
         title.setObjectName("pageTitle")
 
-        self.open_button = QPushButton("Open PDF")
-        self.open_button.setObjectName("primary")
+        self.print_button = QPushButton("Print")
+        self.print_button.setObjectName("primary")
+        self.print_button.clicked.connect(self.print_selected)
+        self.open_button = QPushButton("View PDF")
         self.save_button = QPushButton("Save PDF as...")
         self.receive_button = QPushButton("Receive payment")
         self.loan_button = QPushButton("Loan received")
@@ -146,13 +156,14 @@ class InvoicesPage(QWidget):
             lambda: self._run(lambda c, i: ReceivePaymentDialog(c, i["id"], refund=True, parent=self)))
         self.loan_button.clicked.connect(lambda: self._run(lambda c, i: LoanReceivedDialog(c, i["loan_id"], self)))
         self.cancel_button.clicked.connect(lambda: self._run(lambda c, i: CancelInvoiceDialog(c, i["id"], self)))
-        self.action_buttons = (self.open_button, self.save_button, self.receive_button, self.loan_button,
+        self.action_buttons = (self.print_button, self.open_button, self.save_button, self.receive_button, self.loan_button,
                                self.refund_button, self.cancel_button)
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search invoice no., customer, mobile, chassis / engine / registration no.")
         self.search.setClearButtonEnabled(True)
-        self.type_filter = ChoiceCombo([("Vehicles and parts", None), ("Vehicles", "VEHICLE"), ("Parts", "PART")])
+        self.type_filter = ChoiceCombo([("All types", None), ("Vehicles", "VEHICLE"), ("Parts", "PART"),
+                                        ("Service", "SERVICE")])
         self.status_filter = ChoiceCombo([("All", None), ("Balance due", "DUE"), ("Refund due", "REFUND"),
                                           ("Active", "ACTIVE"), ("Cancelled", "CANCELLED")])
         self.period = ChoiceCombo([("Last 30 days", "30DAYS"), ("Today", "TODAY"), ("This month", "MONTH"),
@@ -164,7 +175,7 @@ class InvoicesPage(QWidget):
         self.table = DataTable([
             Column("Invoice no.", lambda r: r["invoice_no"]),
             Column("Date", lambda r: format_date(r["invoice_date"]), sort_key=lambda r: (r["invoice_date"], r["id"])),
-            Column("Type", lambda r: "Vehicle" if r["invoice_type"] == "VEHICLE" else "Parts"),
+            Column("Type", lambda r: TYPE_LABELS[r["invoice_type"]]),
             Column("Customer", lambda r: r["bill_name"]),
             Column("Mobile", lambda r: r["bill_phone"]),
             Column("Total", lambda r: format_inr(r["grand_total"]), align_right=True, sort_key=lambda r: r["grand_total"]),
@@ -235,6 +246,11 @@ class InvoicesPage(QWidget):
         for r in range(self.table.rowCount()):
             if self.table.item(r, 0).data(Qt.ItemDataRole.UserRole) == invoice_id:
                 self.table.selectRow(r)
+
+    def print_selected(self) -> None:
+        inv = self.selected()
+        if inv is not None:
+            print_invoice(self, self.conn, inv["id"])
 
     def open_pdf(self) -> None:
         inv = self.selected()

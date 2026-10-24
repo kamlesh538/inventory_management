@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QRegularExpression, Qt, QUrl
@@ -56,6 +57,26 @@ def ask_text(parent: QWidget | None, title: str, label: str) -> str | None:
 
     text, ok = QInputDialog.getText(parent, title, label)
     return text if ok else None
+
+
+def choose(parent: QWidget | None, title: str, message: str, options: Sequence[str]) -> str | None:
+    """Ask the user to pick one of several buttons. Returns the chosen label, or None if closed."""
+    box = QMessageBox(parent)
+    box.setWindowTitle(title)
+    box.setText(message)
+    buttons = {box.addButton(label, QMessageBox.ButtonRole.AcceptRole): label for label in options}
+    box.exec()
+    return buttons.get(box.clickedButton())
+
+
+def print_pdf(parent: QWidget | None, path) -> bool:
+    from jbhonda.ui.printing import print_pdf as _print  # PDF/print modules load only when needed
+
+    try:
+        return _print(parent, Path(path))
+    except OSError as exc:
+        show_error(parent, str(exc))
+        return False
 
 
 def open_file(path) -> None:

@@ -10,8 +10,10 @@ from jbhonda.ui.home_page import HomePage
 from jbhonda.ui.invoices_page import InvoicesPage
 from jbhonda.ui.masters_page import MastersPage
 from jbhonda.ui.parts_page import PartsPage
+from jbhonda.ui.sales_report_page import SalesReportPage
 from jbhonda.ui.sell_parts_page import SellPartsPage
 from jbhonda.ui.sell_vehicle_page import SellVehiclePage
+from jbhonda.ui.service_page import ServicePage
 from jbhonda.ui.settings_page import SettingsPage
 from jbhonda.ui.vehicles_page import VehiclesPage
 
@@ -35,8 +37,10 @@ class MainWindow(QMainWindow):
             ("Home", HomePage(conn)),
             ("Sell Vehicle", self.sell_vehicle),
             ("Sell Parts", SellPartsPage(conn)),
+            ("Servicing", ServicePage(conn)),
             ("Bookings", BookingsPage(conn, on_sell=self.sell_booking)),
             ("Invoices", InvoicesPage(conn)),
+            ("Sales Report", SalesReportPage(conn)),
             ("Vehicles", VehiclesPage(conn)),
             ("Parts", PartsPage(conn)),
             ("Masters", MastersPage(conn)),

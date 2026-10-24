@@ -68,8 +68,7 @@ def test_simple_cash_sale(qtbot, conn, shop, messages):
     assert page.summary_labels["balance"].text() == "₹0.00"
 
     invoice_id = page.create_invoice()
-    kind, text = messages[-1]
-    assert kind == "confirm" and text.startswith("Invoice JBH/V/") and "/0001 created." in text
+    assert conn.execute("SELECT invoice_no FROM invoice WHERE id = ?", (invoice_id,)).fetchone()[0].endswith("/0001")
     assert balance_due(conn, invoice_id) == 0
     assert page.customer.customer_id() is None and page.vehicle.value() is None  # form cleared
 

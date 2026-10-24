@@ -161,7 +161,7 @@ def _header(shop, detail: InvoiceDetail) -> Table:
         _p(f"GSTIN: {shop['gstin'] or '-'}" + (f"   State code: {shop['state_code']}" if shop["state_code"] else ""),
            size=8.5, bold=True),
     ]
-    kind = "Vehicle" if inv["invoice_type"] == "VEHICLE" else "Parts"
+    kind = {"VEHICLE": "Vehicle", "PART": "Parts", "SERVICE": "Service"}[inv["invoice_type"]]
     right = [
         _p("TAX INVOICE", size=14, bold=True, align=TA_RIGHT, leading=18),
         _p(f"{kind} sale", size=8.5, align=TA_RIGHT),
@@ -193,6 +193,19 @@ def _parties(shop, detail: InvoiceDetail) -> Table:
                  ("Key no", v["key_number"]), ("Battery no", v["battery_number"]),
                  ("Mfg. month", _month(v["manufacturing_month"])), ("Reg. no", v["registration_number"])]
         right += [_p(f"{k}: {val}", size=8.5) for k, val in pairs if val]
+    job = detail.job
+    if job is not None:
+        right.append(_p("Service details", size=7.5, color=colors.HexColor("#52606d")))
+        kind = f"Free service {job['free_service_no']}" if job["service_type"] == "FREE" else job["service_type"].title()
+        due = ", ".join(x for x in (_date(job["next_service_date"]),
+                                    f"{job['next_service_km']:,} km" if job["next_service_km"] else "") if x)
+        pairs = [("Job card", job["job_no"]), ("Vehicle", job["vehicle_description"]),
+                 ("Reg. no", job["registration_number"]), ("Chassis no", job["chassis_number"]),
+                 ("Odometer", f"{job['odometer_km']:,} km" if job["odometer_km"] is not None else None),
+                 ("Service", kind), ("Mechanic", job["mechanic_name"]), ("Next service due", due)]
+        right += [_p(f"{k}: {val}", size=8.5) for k, val in pairs if val]
+        if job["work_done"]:
+            right.append(_p(f"Work done: {job['work_done']}", size=8.5))
     if inv["hypothecated_to"]:
         right.append(_p(f"Hypothecated to: {inv['hypothecated_to']}", size=8.5, bold=True))
     if detail.insurance is not None:
@@ -206,7 +219,7 @@ def _parties(shop, detail: InvoiceDetail) -> Table:
     return _boxed([[bill_to, right]], [WIDTH * 0.5, WIDTH * 0.5], extra=[("LINEAFTER", (0, 0), (0, 0), 0.6, GRID)])
 
 
-_ITEM_COLUMNS = (("#", 7), ("Description", 55), ("HSN", 13), ("Qty", 9), ("Rate", 19), ("Discount", 16),
+_ITEM_COLUMNS = (("#", 7), ("Description", 52), ("HSN/SAC", 16), ("Qty", 9), ("Rate", 19), ("Discount", 16),
                  ("Taxable", 20), ("GST %", 11), ("GST amt", 17), ("Amount", 19))
 
 
@@ -255,7 +268,7 @@ def _totals(detail: InvoiceDetail) -> Table:
 
 
 def _hsn_summary(detail: InvoiceDetail) -> Table:
-    header = ["HSN", "Taxable value", "CGST rate", "CGST", "SGST rate", "SGST", "Total tax"]
+    header = ["HSN/SAC", "Taxable value", "CGST rate", "CGST", "SGST rate", "SGST", "Total tax"]
     rows = [[_p(h, size=7.5, bold=True, align=TA_RIGHT if i else 0) for i, h in enumerate(header)]]
     for r in detail.hsn_summary:
         half = f"{r.gst_rate_bp / 200:g}%"

@@ -177,13 +177,37 @@ def test_open_pdf_writes_and_opens(page, opened_files):
     assert len(opened_files) == 1 and opened_files[0].suffix == ".pdf" and opened_files[0].exists()
 
 
-def test_sale_offers_to_open_invoice(qtbot, conn, messages, opened_files):
+@pytest.mark.parametrize(("choice", "printed", "opened"), [("Print", 1, 0), ("View PDF", 0, 1), ("Close", 0, 0)])
+def test_sale_offers_to_print(qtbot, conn, messages, opened_files, printed_files, monkeypatch, choice, printed, opened):
     from jbhonda.ui.sell_parts_page import SellPartsPage
 
+    monkeypatch.setattr(widgets, "choose", lambda parent, title, message, options: choice)
     oil = save_part(conn, part_number="OIL2", name="Oil", hsn_code="2710", gst_rate_bp=1800, sale_price=40000,
                     opening_qty=1)
     p = SellPartsPage(conn)
     qtbot.addWidget(p)
     p.add_part(oil)
     assert p.create_bill() is not None
-    assert len(opened_files) == 1
+    assert (len(printed_files), len(opened_files)) == (printed, opened)
+
+
+def test_print_button(page, printed_files):
+    _select(page, "Vehicle")
+    page.print_selected()
+    assert len(printed_files) == 1 and printed_files[0].exists()
+
+
+def test_render_to_printer_produces_every_page(qtbot, conn, sales, tmp_path):
+    """The real printing path, with a PDF 'printer' instead of paper."""
+    from PySide6.QtPrintSupport import QPrinter
+
+    from jbhonda.ui.printing import render_to_printer
+
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(tmp_path / "printed.pdf"))
+    pages = render_to_printer(write_invoice_pdf(conn, sales["vehicle_invoice"]), printer)
+    assert pages == 1
+    doc = QPdfDocument()
+    doc.load(str(tmp_path / "printed.pdf"))
+    assert doc.pageCount() == 1

@@ -12,6 +12,8 @@ from jbhonda.db import NOW
 DEFAULT_PREFIX = {
     "VEHICLE": "JBH/V/",
     "PART": "JBH/P/",
+    "SERVICE": "JBH/S/",
+    "JOB": "JBH/J/",
     "BOOKING": "JBH/B/",
     "RECEIPT": "JBH/R/",
 }

@@ -295,7 +295,32 @@ Balance due on an invoice = `grand_total − SUM(payment.amount)`.
 
 ---
 
-## 7. Relationships
+## 7. Servicing (schema 0002, approved 2026-10-24)
+
+Workflow: job card when the vehicle arrives -> parts issued (stock reduces immediately) and
+labour added while working -> SERVICE invoice at delivery. Free services are tracked.
+
+### `service_job` (job card)
+job_no (`JBH/J/2026-27/0001`), customer, vehicle_id (if we sold it) or typed registration /
+model / chassis, odometer_km, service_type (`PAID`, `FREE`, `WARRANTY`, `ACCIDENT`),
+free_service_no, complaints, work_done, mechanic_name, received/promised/delivered times,
+next_service_date / next_service_km, status (`OPEN`, `BILLED`, `CANCELLED`), invoice_id.
+
+### `service_job_part` / `service_job_labour`
+Parts issued to the job (qty, price, discount, cost) and labour lines (description, charge
+incl. GST, SAC code, GST rate). Locked once the job is billed.
+
+### `labour_item`
+Labour price list (name, default charge, SAC `998714`, GST 18%), editable under Masters.
+
+### Changes to existing tables
+- `invoice.invoice_type` adds `SERVICE` (series `JBH/S/`); `invoice_item.item_kind` adds `LABOUR`.
+- `part_stock_movement` adds `JOB_ISSUE` / `JOB_RETURN` and a `service_job_id` link.
+- Cancelling a SERVICE invoice re-opens its job card; cancelling a job card returns its parts.
+- A part's stock-in history can be deleted only together with a part that was never sold or
+  used on a job (so mistakes can be removed; real history can't).
+
+## 8. Relationships
 
 ```mermaid
 erDiagram
@@ -320,7 +345,7 @@ erDiagram
     INSURER ||--o{ INSURANCE_POLICY : issues
 ```
 
-## 8. Mapping from your draft
+## 9. Mapping from your draft
 
 | Your draft | This model |
 |---|---|
@@ -332,7 +357,7 @@ erDiagram
 | Insurance(id, bank) | `insurer` master + `insurance_policy` |
 | Loan(id, bank) | `financer` master + `loan` |
 
-## 9. Out of scope for v1 (schema leaves room)
+## 10. Out of scope for v1 (schema leaves room)
 
 - Workshop/service job cards
 - Supplier master and purchase orders (the supplier bill no. is stored as text for now)
