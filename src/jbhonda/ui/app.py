@@ -5,7 +5,10 @@ import sys
 import traceback
 from logging.handlers import RotatingFileHandler
 
-from PySide6.QtGui import QFont
+from importlib import resources
+
+from PySide6.QtCore import QLockFile, QTimer
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from jbhonda import config
@@ -62,14 +65,45 @@ def _excepthook(exc_type, exc, tb) -> None:
     )
 
 
-def run() -> int:
+def _smoke_test(window) -> None:
+    """Touch every part that depends on bundled files, so a broken build fails here, not at the counter."""
+    import tempfile
+    from pathlib import Path
+
+    from jbhonda.reports.export import build_reports, write_xlsx
+    from jbhonda.reports.invoice_pdf import _register_fonts
+
+    for name in window.page_by_name:
+        window.open_page(name)
+    _register_fonts()
+    with tempfile.TemporaryDirectory() as tmp:
+        write_xlsx(Path(tmp) / "check.xlsx", build_reports(window.conn, ["sales", "parts"], None, None))
+    log.info("Smoke test passed")
+
+
+def run(smoke_test: bool = False) -> int:
+    """Start the app. smoke_test: open everything, then quit after a moment (used to check a build)."""
     _setup_logging()
+    if sys.platform == "win32":
+        # Own taskbar identity, so Windows shows our icon rather than Python's.
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("JaiBajrangBaliHonda.Inventory")
     app = QApplication(sys.argv)
     app.setApplicationName("Jai Bajrang Bali Honda")
+    app.setWindowIcon(QIcon(str(resources.files("jbhonda.assets").joinpath("app.ico"))))
     app.setStyle("Fusion")
     app.setFont(QFont("Segoe UI"))
     app.setStyleSheet(STYLE)
     sys.excepthook = _excepthook
+
+    # One copy at a time: a second window on the same data only causes confusion,
+    # and the installer needs the app closed to update it.
+    lock = QLockFile(str(config.data_dir() / "app.lock"))
+    lock.setStaleLockTime(0)
+    if not lock.tryLock(200):
+        QMessageBox.information(None, "Already open", "The app is already running. Look for it on the taskbar.")
+        return 0
 
     try:
         conn = open_database()
@@ -94,6 +128,11 @@ def run() -> int:
 
     window = MainWindow(conn)
     window.showMaximized()
+    if smoke_test:
+        _smoke_test(window)
+        QTimer.singleShot(1500, app.quit)
     code = app.exec()
     conn.close()
+    lock.unlock()
+    log.info("Closed")
     return code

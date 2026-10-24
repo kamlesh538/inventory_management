@@ -25,7 +25,7 @@ Target: Windows 10/11, 64-bit. Single installer `.exe`; data in
 7. [x] Sell parts: counter sale
 8. [x] Invoices screen (list, receive balance, loan received, cancel) + invoice PDFs
 9. [x] Export (Excel/CSV), backup & restore
-10. [ ] Installer; test on a clean Windows 10 machine
+10. [x] Installer (PyInstaller + Inno Setup, GitHub Actions build) - still to test on a real Windows 10 PC
 
 ## Development
 

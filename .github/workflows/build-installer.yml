@@ -1,0 +1,29 @@
+# Builds the Windows installer in the cloud. Run it from GitHub: Actions -> "Build installer" -> Run workflow,
+# or push a tag like v0.1.0. Download the .exe from the run's "Artifacts" section.
+name: Build installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install Inno Setup
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Test, build and package
+        run: powershell -ExecutionPolicy Bypass -File packaging\build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JBHonda-Setup
+          path: dist/JBHonda-Setup-*.exe
+          if-no-files-found: error

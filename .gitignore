@@ -5,6 +5,7 @@ __pycache__/
 build/
 dist/
 *.spec
+!packaging/jbhonda.spec
 *.db
 *.db-wal
 *.db-shm
